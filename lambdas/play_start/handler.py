@@ -14,44 +14,12 @@ from datetime import datetime, timezone
 from lambdas.common import constants, plays_dynamo, questions_dynamo, quizzes_dynamo
 from lambdas.common.errors import handle_errors, NotFoundError, ValidationError
 from lambdas.common.logger import get_logger
+from lambdas.common.play_view import public_question, today_utc
 from lambdas.common.utility_helpers import parse_body, success_response
 
 log = get_logger(__file__)
 
 HANDLER = 'play_start'
-
-
-def today_utc():
-    """The quiz day is UTC, stated in the UI. Not the caller's timezone."""
-    return datetime.now(timezone.utc).date().isoformat()
-
-
-def public_question(question, index, total):
-    """
-    Strip everything that would give the answer away.
-
-    Distractors ship shuffled together with the correct option, so the payload
-    carries the choices without saying which is right.
-    """
-    options = None
-    if question.get("type") == "mc":
-        options = sorted(
-            [str(question["answer"])] + list(question.get("distractors") or []),
-            key=lambda o: hash((question["questionId"], o)) & 0xFFFF,
-        )
-
-    return {
-        'index': index,
-        'total': total,
-        'questionId': question['questionId'],
-        'type': question['type'],
-        'tier': question['tier'],
-        'prompt': question['prompt'],
-        'sport': question['sport'],
-        'league': question.get('league'),
-        'options': options,
-        'tolerance': question.get('tolerance') if question.get('type') == 'numeric' else None,
-    }
 
 
 @handle_errors(HANDLER)

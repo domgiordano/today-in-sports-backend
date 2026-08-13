@@ -14,7 +14,7 @@ from lambdas.common import plays_dynamo
 from lambdas.common.errors import handle_errors
 from lambdas.common.logger import get_logger
 from lambdas.common.utility_helpers import get_query_params, success_response
-from lambdas.play_start.handler import today_utc
+from lambdas.common.play_view import today_utc
 
 log = get_logger(__file__)
 

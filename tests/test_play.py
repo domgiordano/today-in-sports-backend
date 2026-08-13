@@ -11,6 +11,7 @@ import json
 
 import pytest
 
+from lambdas.common import play_view
 from lambdas.play_start import handler as start_h
 
 
@@ -45,7 +46,7 @@ class TestAnswersNeverLeak:
     """
 
     def test_public_question_omits_the_answer(self):
-        pub = start_h.public_question(question(), 0, 5)
+        pub = play_view.public_question(question(), 0, 5)
         blob = json.dumps(pub)
         assert "answer" not in pub
         assert "distractors" not in pub
@@ -55,27 +56,32 @@ class TestAnswersNeverLeak:
         assert '"answer"' not in blob
 
     def test_options_include_every_choice_exactly_once(self):
-        pub = start_h.public_question(question(), 0, 5)
+        pub = play_view.public_question(question(), 0, 5)
         assert sorted(pub["options"]) == sorted(
             ["Nolan Ryan", "Stan Belinda", "Bruce Hurst", "Jose Mesa"])
 
     def test_option_order_is_stable_for_a_question(self):
         """Otherwise a refresh reshuffles and the answer can be inferred."""
-        first = start_h.public_question(question(), 0, 5)["options"]
-        second = start_h.public_question(question(), 0, 5)["options"]
+        first = play_view.public_question(question(), 0, 5)["options"]
+        second = play_view.public_question(question(), 0, 5)["options"]
         assert first == second
 
     def test_numeric_questions_expose_tolerance_but_not_the_number(self):
-        pub = start_h.public_question(question(qtype="numeric"), 0, 5)
+        pub = play_view.public_question(question(qtype="numeric"), 0, 5)
         assert pub["options"] is None
         assert pub["tolerance"] == 2
         assert "answer" not in pub
 
 
 class TestQuizDayIsUtc:
+    """
+    UTC, not local. A per-viewer day would fragment the leaderboard into
+    twenty-four overlapping days and let a player see tomorrow's quiz early.
+    """
+
     def test_today_is_utc_not_local(self):
         from datetime import datetime, timezone
-        assert start_h.today_utc() == datetime.now(timezone.utc).date().isoformat()
+        assert play_view.today_utc() == datetime.now(timezone.utc).date().isoformat()
 
 
 class TestStartRequiresIdentityAndAPublishedQuiz:
@@ -182,3 +188,26 @@ class TestSessionHelpers:
             plays_dynamo.session_key("a", "2026-08-14")
         assert plays_dynamo.session_key("a", "2026-08-13") != \
             plays_dynamo.session_key("b", "2026-08-13")
+
+
+class TestNoCrossLambdaImports:
+    """
+    Each Lambda ships with its own folder plus the shared layer, so a handler
+    importing from a sibling handler resolves locally and then dies at cold
+    start with `No module named 'lambdas.play_start'`. Shared code belongs in
+    `lambdas/common`.
+    """
+
+    def test_handlers_do_not_import_each_other(self):
+        import pathlib
+        import re
+
+        root = pathlib.Path(__file__).resolve().parent.parent / "lambdas"
+        offenders = []
+        for handler in root.glob("*/handler.py"):
+            own = handler.parent.name
+            for line in handler.read_text().splitlines():
+                m = re.match(r"\s*from lambdas\.(\w+)\.handler import", line)
+                if m and m.group(1) != own and m.group(1) != "common":
+                    offenders.append(f"{own} imports {m.group(1)}")
+        assert not offenders, "cross-lambda imports: " + ", ".join(offenders)
