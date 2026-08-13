@@ -160,3 +160,48 @@ class TestOutputShape:
             assert e["sourceName"] == "retrosheet"
             assert len(e["mmdd"]) == 5
             assert "None" not in e["title"]
+
+
+class TestPostseasonExcludedFromCareerTotals:
+    """
+    Official career win totals are regular season only.
+
+    Counting postseason wins shifts every milestone earlier and the output still
+    looks entirely plausible — Randy Johnson's 300th moved to 2008-08-01 from
+    the correct 2009-06-04, Seaver's to 1985-07-14 from 1985-08-04. The only way
+    to catch it is to check against a date that is known.
+    """
+
+    def _games(self, regular_wins, postseason_wins):
+        out = []
+        gid = 0
+        for i in range(regular_wins):
+            gid += 1
+            g = game(f"{1920 + i // 30}-06-{(i % 28) + 1:02d}", gid, ("p", "Ace"))
+            g["seriesDescription"] = "Regular Season"
+            out.append(g)
+        for i in range(postseason_wins):
+            gid += 1
+            g = game(f"{1920 + i // 30}-10-{(i % 28) + 1:02d}", gid, ("p", "Ace"))
+            g["seriesDescription"] = "World Series"
+            out.append(g)
+        return out
+
+    def test_postseason_wins_do_not_advance_a_milestone(self):
+        """99 regular-season wins plus 10 postseason wins is not 100."""
+        from scripts.build_corpus import MilestoneAccumulator
+
+        acc = MilestoneAccumulator()
+        acc.feed(self._games(regular_wins=99, postseason_wins=10))
+        assert acc.finish() == [], "postseason wins were counted toward the career total"
+
+    def test_the_hundredth_regular_season_win_does(self):
+        from scripts.build_corpus import MilestoneAccumulator
+
+        acc = MilestoneAccumulator()
+        acc.feed(self._games(regular_wins=100, postseason_wins=10))
+        events = [e for e in acc.finish() if e["reason"] == "pitcher_win_milestone"]
+        assert len(events) == 1
+        assert events[0]["facts"]["careerWins"] == 100
+        # It must land on a regular-season date, not an October one.
+        assert events[0]["gameDate"][5:7] == "06"
