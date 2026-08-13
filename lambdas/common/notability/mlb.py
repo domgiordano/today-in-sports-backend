@@ -97,6 +97,17 @@ def detect_no_hitter(game):
         thrower_won = bool(thrower.get("isWinner"))
         pitcher = winner_name if (thrower_won and winner_name) else None
 
+        # Retrosheet carries pitchers-used on the record itself ("1 means it
+        # was a complete game"), so attribution resolves here with no follow-up
+        # request. The MLB API does not, and falls through to
+        # enrich_from_boxscore. Same answer, one fewer round-trip.
+        used = thrower.get("pitchersUsed")
+        combined = None
+        if used is not None:
+            combined = used > 1
+            if combined:
+                pitcher = None
+
         facts = {
             "noHitTeam": held["team"],
             "noHitTeamHits": 0,
@@ -104,7 +115,16 @@ def detect_no_hitter(game):
             "throwingTeam": thrower["team"],
             "throwingTeamRuns": thrower.get("runs"),
             "pitcher": pitcher,
-            "attributionConfidence": "high" if pitcher else "unknown",
+            "pitchersUsed": used,
+            "combined": combined,
+            "attributionConfidence": (
+                "combined" if combined
+                else "high" if pitcher
+                else "unknown"
+            ),
+            "creditedTo": (
+                f"the {thrower['team']} pitching staff" if combined else pitcher
+            ),
             "noHitTeamWon": bool(held.get("isWinner")),
             "innings": innings,
         }
@@ -113,7 +133,24 @@ def detect_no_hitter(game):
             if pitcher is None
             else f"{pitcher} no-hit the {held['team']}"
         )
-        out.append(_base(game, "no_hitter", 92, title, facts))
+        ev = _base(game, "no_hitter", 92, title, facts)
+
+        # Retrosheet also carries at-bats, walks and hit-by-pitch inline, so a
+        # perfect game resolves without a boxscore request too. 27 at-bats with
+        # nobody reaching base is the definition.
+        if (held.get("atBats") is not None and held.get("walks") is not None
+                and held.get("hitByPitch") is not None and combined is False):
+            if (held["atBats"] == 27 and held["walks"] == 0
+                    and held["hitByPitch"] == 0):
+                facts["perfectGame"] = True
+                ev["reason"] = "perfect_game"
+                ev["notabilityScore"] = 99
+                ev["title"] = (
+                    f"{pitcher or thrower['team']} threw a perfect game "
+                    f"against the {held['team']}"
+                )
+
+        out.append(ev)
     return out
 
 
@@ -372,7 +409,10 @@ def run(games, enrich=True, dedupe=True):
             continue
         for det in DETECTORS:
             for ev in det(g):
-                if enrich and ev["reason"] == "no_hitter":
+                # Only the API path needs the extra request; Retrosheet rows
+                # have already resolved attribution inline.
+                needs_boxscore = ev["facts"].get("pitchersUsed") is None
+                if enrich and ev["reason"] == "no_hitter" and needs_boxscore:
                     enrich_from_boxscore(ev)
                 events.append(ev)
     return dedupe_by_game(events) if dedupe else events
