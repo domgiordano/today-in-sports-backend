@@ -302,3 +302,98 @@ def validate(q):
     if not (1 <= q.get("tier", 0) <= 5):
         problems.append("bad tier")
     return problems
+
+
+# ------------------------------------------------------- career milestones
+
+def mc_milestone_pitcher(event, ctx):
+    """Who reached a career win milestone. Distractors are other real pitchers."""
+    if event.get("sport") != "mlb" or event["reason"] != "pitcher_win_milestone":
+        return []
+    f = event["facts"]
+    pool = [p for p in ctx.get("milestone_pitchers", []) if p and p != f["player"]]
+    if len(pool) < 3:
+        return []
+    return [_q(event, "mc",
+               f"On {pretty_date(event['gameDate'])}, which pitcher recorded his "
+               f"{f['careerWins']}th career win?",
+               f["player"], distractors=pool[:3])]
+
+
+def numeric_milestone_count(event, ctx):
+    if event.get("sport") != "mlb" or event["reason"] != "pitcher_win_milestone":
+        return []
+    f = event["facts"]
+    return [_q(event, "numeric",
+               f"{f['player']} hit a career milestone pitching for the "
+               f"{f['team']} on {pretty_date(event['gameDate'])}. "
+               f"How many career wins did that make?",
+               f["careerWins"], numericAnswer=f["careerWins"], tolerance=0)]
+
+
+def mc_debut(event, ctx):
+    """
+    A debut is only interesting in hindsight, so the prompt says what the career
+    became — that is what makes it a question rather than a trivia dead end.
+    """
+    if event.get("sport") != "mlb" or event["reason"] != "player_debut":
+        return []
+    f = event["facts"]
+    pool = [p for p in ctx.get("debut_players", []) if p and p != f["player"]]
+    if len(pool) < 3:
+        return []
+    return [_q(event, "mc",
+               f"On {pretty_date(event['gameDate'])}, which future star made his "
+               f"first appearance, going on to {f['careerStarts']} starts over "
+               f"{f['spanYears']} seasons?",
+               f["player"], distractors=pool[:3])]
+
+
+def numeric_career_span(event, ctx):
+    if event.get("sport") != "mlb" or event["reason"] != "player_finale":
+        return []
+    f = event["facts"]
+    if not f.get("spanYears"):
+        return []
+    # A career that began before the corpus has a truncated span. Asking "how
+    # many seasons" would state a number the data cannot support.
+    if not f.get("careerFullyObserved"):
+        return []
+    return [_q(event, "numeric",
+               f"{f['player']} played his final game on "
+               f"{pretty_date(event['gameDate'])}. Across how many seasons did "
+               f"his career run?",
+               f["spanYears"], numericAnswer=f["spanYears"], tolerance=2)]
+
+
+MILESTONE_TEMPLATES = [
+    mc_milestone_pitcher,
+    numeric_milestone_count,
+    mc_debut,
+    numeric_career_span,
+]
+
+
+def build_milestone_context(events):
+    """Real-name pools drawn from the milestone events themselves."""
+    pitchers, players = [], []
+    for e in events:
+        f = e.get("facts") or {}
+        if e["reason"] == "pitcher_win_milestone":
+            pitchers.append(f.get("player"))
+        elif e["reason"] in ("player_debut", "player_finale"):
+            players.append(f.get("player"))
+
+    def uniq(xs):
+        return list(dict.fromkeys(x for x in xs if x))
+
+    return {"milestone_pitchers": uniq(pitchers), "debut_players": uniq(players)}
+
+
+def generate_milestones(events):
+    ctx = build_milestone_context(events)
+    out = []
+    for ev in events:
+        for tpl in MILESTONE_TEMPLATES:
+            out.extend(tpl(ev, ctx))
+    return out

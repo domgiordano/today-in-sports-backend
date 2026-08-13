@@ -70,10 +70,17 @@ F = {
     "hAB": 49, "hH": 50, "hHR": 53, "hHBP": 57, "hBB": 58, "hK": 60,
     "hPitchers": 66,
     "hE": 73,
-    "wpName": 94, "lpName": 96,
-    "vStartPitcher": 102, "hStartPitcher": 104,
+    "wpId": 93, "wpName": 94, "lpId": 95, "lpName": 96,
+    "svId": 97, "svName": 98,
+    "vStartPitcherId": 101, "vStartPitcher": 102,
+    "hStartPitcherId": 103, "hStartPitcher": 104,
+    # Starting lineups: 9 players per side as (id, name, position) triples.
+    "vLineupStart": 105,
+    "hLineupStart": 132,
     "acquisition": 160,
 }
+
+LINEUP_SIZE = 9
 
 LEAGUE_NAMES = {
     "AL": "American League",
@@ -191,6 +198,44 @@ def innings_from_outs(outs):
     return math.ceil(o / 6)
 
 
+def _players(row, gdate):
+    """
+    Pull player identity out of a game-log record.
+
+    Game logs give starters, not every appearance, so a career total derived
+    from them is a career of *starts*. That is the right unit for pitcher wins
+    (a win is already an award to one pitcher) and a good proxy for position
+    players, but it is not a full games-played count and should not be labelled
+    as one.
+    """
+    def person(id_key, name_key):
+        pid, name = row[F[id_key]].strip(), row[F[name_key]].strip()
+        if not pid or name in ("", "(none)"):
+            return None
+        return {"id": pid, "name": name}
+
+    lineups = []
+    for side, start in (("away", F["vLineupStart"]), ("home", F["hLineupStart"])):
+        for i in range(LINEUP_SIZE):
+            base = start + i * 3
+            if base + 2 >= len(row):
+                break
+            pid, name, pos = row[base].strip(), row[base + 1].strip(), row[base + 2].strip()
+            if not pid or name in ("", "(none)"):
+                continue
+            lineups.append({"id": pid, "name": name, "position": pos,
+                            "side": side, "battingOrder": i + 1})
+
+    return {
+        "winningPitcher": person("wpId", "wpName"),
+        "losingPitcher": person("lpId", "lpName"),
+        "savingPitcher": person("svId", "svName"),
+        "awayStarter": person("vStartPitcherId", "vStartPitcher"),
+        "homeStarter": person("hStartPitcherId", "hStartPitcher"),
+        "lineups": lineups,
+    }
+
+
 def normalize(row, names, series=None, game_number=None, games_in_series=None):
     """
     Convert one game-log record into the shared normalized game shape, so the
@@ -239,6 +284,10 @@ def normalize(row, names, series=None, game_number=None, games_in_series=None):
         "home": side("h", h_code, row[F["hLeague"]], h_runs, v_runs),
         "decisions": {"winner": {"fullName": row[F["wpName"]] or None},
                       "loser": {"fullName": row[F["lpName"]] or None}},
+        # Player identity, needed for career milestones. Retrosheet ids are
+        # stable across a career ("mcdoj001"), which is what makes "300th win"
+        # computable with an exact date rather than only a season total.
+        "players": _players(row, gdate),
         "park": row[F["park"]],
         "sourceName": SOURCE_NAME,
         "sourceDatasetRef": (
