@@ -67,9 +67,28 @@ class TestNormalize:
 
 class TestCredential:
     def test_missing_key_raises_something_actionable(self, monkeypatch):
+        """
+        Both lookup paths must fail for this to test anything.
+
+        This originally relied on the test environment having no AWS
+        credentials — which stopped being true the moment the parameter was
+        created, and the test silently started passing through to a real SSM
+        read. A test whose outcome depends on ambient cloud state is not a test,
+        so the SSM path is stubbed to fail explicitly.
+        """
         monkeypatch.delenv("BALLDONTLIE_API_KEY", raising=False)
         monkeypatch.setattr(bdl, "_api_key", None)
-        # No AWS credentials in the test environment, so the SSM path fails too.
+
+        import builtins
+        real_import = builtins.__import__
+
+        def no_boto(name, *args, **kwargs):
+            if name == "boto3":
+                raise ImportError("boto3 unavailable in this test")
+            return real_import(name, *args, **kwargs)
+
+        monkeypatch.setattr(builtins, "__import__", no_boto)
+
         with pytest.raises(bdl.MissingCredentialError) as exc:
             bdl.api_key()
         message = str(exc.value)
@@ -100,8 +119,8 @@ class TestDetectorCalibration:
         assert nb.run([g]) == []
 
     @pytest.mark.parametrize("margin,expected", [
-        (39, False),   # just under the 40-point bar
-        (41, True),
+        (45, False),   # a 40-point bar fired 22 times in a real season
+        (51, True),
     ])
     def test_blowout_threshold(self, margin, expected):
         g = bdl.normalize(raw(home_score=100 + margin, away_score=100))
@@ -136,6 +155,15 @@ class TestFinalsInference:
         # It must not claim a championship it cannot know about.
         assert "Finals" not in e["title"]
         assert "won the title" not in e["title"]
+
+    def test_a_may_playoff_game_is_not_treated_as_late(self):
+        """
+        May is four rounds of playoffs, ~40 games. Including it fired 46 times
+        in one measured season, against a 15-per-season calibration bar.
+        """
+        g = bdl.normalize(raw(postseason=True, date="1995-05-20T00:00:00.000Z",
+                              home_score=101, away_score=99))
+        assert not [e for e in nb.run([g]) if e["reason"] == "nba_late_playoff"]
 
     def test_an_april_playoff_game_is_not_treated_as_late(self):
         g = bdl.normalize(raw(postseason=True, date="1995-04-28T00:00:00.000Z",

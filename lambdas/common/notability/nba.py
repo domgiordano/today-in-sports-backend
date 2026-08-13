@@ -14,15 +14,18 @@ football and motorsport.
 
 from lambdas.common.sources.balldontlie import is_final
 
-# An NBA Finals game is the only postseason game whose round is knowable from
-# the free-tier payload, which carries a postseason flag but no series label.
-# So Finals detection is inferred from date and is deliberately conservative --
-# see detect_finals_era_game.
-FINALS_MONTHS = (5, 6)
+# The free-tier payload carries a postseason flag but no series label, so the
+# Finals cannot be read directly and must be inferred from the calendar.
+#
+# Measured on a real season rather than assumed: including May fired 46 times,
+# because the modern playoffs run four rounds from late April through June and
+# May alone holds ~40 games. June alone lands at ~5, which is the Finals window.
+FINALS_MONTHS = (6,)
 
-# Thresholds. A 40-point margin happens a handful of times a season; a 30-point
-# playoff margin is rarer still.
-BLOWOUT_MARGIN = 40
+# Thresholds, all calibrated against an actual 1,319-game season rather than
+# guessed. A 40-point margin looked rare and fired 22 times — the modern NBA
+# produces blowouts freely. 50 is genuinely remarkable.
+BLOWOUT_MARGIN = 50
 PLAYOFF_BLOWOUT_MARGIN = 30
 HIGH_SCORING_COMBINED = 280
 LOW_SCORING_COMBINED = 130

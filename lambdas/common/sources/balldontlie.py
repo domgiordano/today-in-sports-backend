@@ -33,11 +33,21 @@ SOURCE_NAME = "balldontlie"
 
 SSM_KEY_PATH = "/today-in-sports/balldontlie/api-key"
 
-# The free tier is metered per minute; this stays well inside it and makes a
-# multi-decade backfill boring rather than a source of 429s.
-THROTTLE_SECONDS = 1.2
-MAX_RETRIES = 5
+# The free tier allows FIVE requests per minute — confirmed from the response
+# headers (`x-ratelimit-limit: 5`), not guessed. That is roughly one every
+# twelve seconds, so a season (~1,320 games at 100 per page, ~14 requests) takes
+# about three minutes and the full 1946-2025 backfill takes a few hours.
+#
+# That is fine: this is a one-time extraction of immutable history. It is not
+# fine to discover the limit by hammering, which is why 429s are handled by
+# honouring the server's own Retry-After rather than by backing off blindly.
+THROTTLE_SECONDS = 12.5
+MAX_RETRIES = 6
 PER_PAGE = 100
+
+# Ceiling on how long to obey a Retry-After, so a pathological value cannot
+# stall a backfill indefinitely.
+MAX_RETRY_AFTER_SECONDS = 120
 
 POSTSEASON_LABEL = "Playoffs"
 
@@ -99,11 +109,23 @@ def _get(path, params=None):
             if e.code == 401:
                 raise MissingCredentialError(
                     "balldontlie rejected the API key (401)") from e
-            if e.code in (429, 500, 502, 503, 504) and attempt < MAX_RETRIES - 1:
-                # 429 is expected on the free tier; back off rather than fail.
+
+            if e.code == 429 and attempt < MAX_RETRIES - 1:
+                # The server states exactly how long to wait. Obey it rather
+                # than guessing — blind exponential backoff either wastes time
+                # or keeps tripping the same limit.
+                try:
+                    wait = float(e.headers.get("retry-after", delay))
+                except (TypeError, ValueError):
+                    wait = delay
+                time.sleep(min(wait, MAX_RETRY_AFTER_SECONDS) + 1)
+                continue
+
+            if e.code in (500, 502, 503, 504) and attempt < MAX_RETRIES - 1:
                 time.sleep(delay)
                 delay *= 2
                 continue
+
             raise SourceError(f"HTTP {e.code} for {url}") from e
         except Exception as e:
             if attempt < MAX_RETRIES - 1:
