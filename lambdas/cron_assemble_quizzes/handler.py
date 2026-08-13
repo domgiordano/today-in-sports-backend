@@ -42,11 +42,11 @@ def handler(event, context):
     days = int((event or {}).get('daysAhead', DEFAULT_DAYS_AHEAD))
     start = datetime.now(timezone.utc).date()
 
-    bank = questions_dynamo.list_bank('approved', limit=1000)
-    log.info(f'assembling {days} days from a bank of {len(bank)}')
+    log.info(f'assembling {days} days')
 
     proposed = skipped = incomplete = 0
     thin_dates = []
+    bank_seen = 0
 
     for offset in range(days):
         quiz_date = (start + timedelta(days=offset)).isoformat()
@@ -57,8 +57,19 @@ def handler(event, context):
             skipped += 1
             continue
 
+        # Fetched per date, not sliced off a global bank.
+        #
+        # This used to pull a flat 1,000 approved questions and let the
+        # assembler filter them by calendar date. That worked while the bank
+        # was small and silently stops working as it grows: with 20,000
+        # approved, a 1,000-row slice holds almost nothing for any particular
+        # day, and every quiz comes out short for no visible reason.
+        day_bank, _ = questions_dynamo.list_by_status(
+            'approved', quiz_date[5:], limit=200)
+        bank_seen += len(day_bank)
+
         used = quizzes_dynamo.used_question_ids(quiz_date[5:])
-        result = assemble(quiz_date, bank, used_ids=used)
+        result = assemble(quiz_date, day_bank, used_ids=used)
         item = result.to_item()
 
         try:
@@ -84,7 +95,7 @@ def handler(event, context):
         # Surfaced rather than buried: a short day is a content gap that needs
         # more inventory, not something to quietly ship.
         'thinDates': thin_dates[:30],
-        'bankSize': len(bank),
+        'bankSize': bank_seen,
         'finishedAt': datetime.now(timezone.utc).isoformat(),
     })
 
@@ -94,5 +105,5 @@ def handler(event, context):
         'skipped': skipped,
         'incomplete': incomplete,
         'thinDates': thin_dates,
-        'bankSize': len(bank),
+        'bankSize': bank_seen,
     })

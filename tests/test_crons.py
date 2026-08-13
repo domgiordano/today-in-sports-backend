@@ -36,8 +36,8 @@ class TestAssembleCron:
         """
         written = []
 
-        monkeypatch.setattr("lambdas.common.questions_dynamo.list_bank",
-                            lambda *a, **k: [q(f"q{t}", t) for t in range(1, 6)])
+        monkeypatch.setattr("lambdas.common.questions_dynamo.list_by_status",
+                            lambda *a, **k: ([q(f"q{t}", t) for t in range(1, 6)], None))
         monkeypatch.setattr("lambdas.common.quizzes_dynamo.get_quiz",
                             lambda d: {"quizDate": d, "status": "published"})
         monkeypatch.setattr("lambdas.common.quizzes_dynamo.used_question_ids",
@@ -54,9 +54,9 @@ class TestAssembleCron:
 
     def test_proposes_drafts_for_untouched_days(self, monkeypatch):
         written = []
-        monkeypatch.setattr("lambdas.common.questions_dynamo.list_bank",
-                            lambda *a, **k: [q(f"q{t}", t, mmdd="01-01")
-                                             for t in range(1, 6)])
+        monkeypatch.setattr("lambdas.common.questions_dynamo.list_by_status",
+                            lambda *a, **k: ([q(f"q{t}", t, mmdd="01-01")
+                                             for t in range(1, 6)], None))
         monkeypatch.setattr("lambdas.common.quizzes_dynamo.get_quiz", lambda d: None)
         monkeypatch.setattr("lambdas.common.quizzes_dynamo.used_question_ids",
                             lambda mmdd: set())
@@ -76,8 +76,8 @@ class TestAssembleCron:
         A short day is a content gap that needs more inventory. Silently
         shipping four questions would look like success.
         """
-        monkeypatch.setattr("lambdas.common.questions_dynamo.list_bank",
-                            lambda *a, **k: [q("only", 1, mmdd="01-01")])
+        monkeypatch.setattr("lambdas.common.questions_dynamo.list_by_status",
+                            lambda *a, **k: ([q("only", 1, mmdd="01-01")], None))
         monkeypatch.setattr("lambdas.common.quizzes_dynamo.get_quiz", lambda d: None)
         monkeypatch.setattr("lambdas.common.quizzes_dynamo.used_question_ids",
                             lambda mmdd: set())
@@ -91,9 +91,9 @@ class TestAssembleCron:
     def test_respects_questions_already_used_on_that_calendar_date(self, monkeypatch):
         """The no-repeat guarantee has to hold when the job is unattended too."""
         seen = {}
-        monkeypatch.setattr("lambdas.common.questions_dynamo.list_bank",
-                            lambda *a, **k: [q(f"q{t}", t, mmdd="01-01")
-                                             for t in range(1, 6)])
+        monkeypatch.setattr("lambdas.common.questions_dynamo.list_by_status",
+                            lambda *a, **k: ([q(f"q{t}", t, mmdd="01-01")
+                                             for t in range(1, 6)], None))
         monkeypatch.setattr("lambdas.common.quizzes_dynamo.get_quiz", lambda d: None)
         monkeypatch.setattr("lambdas.common.quizzes_dynamo.used_question_ids",
                             lambda mmdd: seen.setdefault(mmdd, {"q1", "q2"}))
