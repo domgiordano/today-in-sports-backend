@@ -189,3 +189,35 @@ class TestSharedShape:
             assert 1 <= int(e["mmdd"][:2]) <= 12
             assert e["sourceDatasetRef"], "provenance is mandatory"
             assert "None" not in e["title"]
+
+
+class TestTemplatesDoNotCrossSports:
+    """
+    Reason codes are not unique across sports — NHL and NFL both use
+    `playoff_overtime`. Templates keyed on reason alone fired the football
+    template on hockey events, producing two near-identical questions from one
+    game. Every template must gate on sport as well.
+    """
+
+    def test_no_event_yields_a_question_from_another_sport(self):
+        from lambdas.common.templates import winter_templates as wt
+
+        events = (
+            nhl_nb.run(load("nhl_games.json"))
+            + f1_nb.run(load("f1_races.json"))
+            + nfl_nb.run(load("nfl_games.json"))
+        )
+        by_id = {e["gameId"]: e["sport"] for e in events}
+
+        for q in wt.generate(events):
+            assert q["sport"] == by_id[q["sourceEventId"]], (
+                f"{q['sport']} template fired on a "
+                f"{by_id[q['sourceEventId']]} event: {q['prompt'][:60]}"
+            )
+
+    def test_one_question_per_template_per_event(self):
+        from lambdas.common.templates import winter_templates as wt
+
+        events = nhl_nb.run(load("nhl_games.json"))
+        prompts = [q["prompt"] for q in wt.generate(events)]
+        assert len(prompts) == len(set(prompts)), "duplicate prompts generated"
