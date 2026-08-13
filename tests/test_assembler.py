@@ -130,3 +130,34 @@ class TestCoverageReport:
         rep = asm.coverage_report([q("d", 1, status="draft")])
         assert rep["approvedTotal"] == 0
         assert rep["datesCovered"] == 0
+
+
+class TestSameEvent:
+    """
+    Two questions built from one event must not share a quiz.
+
+    They have different ids, so deduping on questionId alone lets them through,
+    and for transactions one routinely answers the other: the sale-price
+    question names the buying club that the destination question asks for.
+    """
+
+    def _pair(self):
+        a = q("a", 1)
+        b = q("b", 2)
+        a["sourceEventId"] = b["sourceEventId"] = "tran-46087"
+        return [a, b]
+
+    def test_a_second_question_from_the_same_event_is_not_chosen(self):
+        bank = self._pair() + [q("c", 3), q("d", 4), q("e", 5)]
+        r = asm.assemble("2026-08-13", bank)
+
+        events = [x.get("sourceEventId") for x in r.questions]
+        assert events.count("tran-46087") == 1
+
+    def test_questions_without_an_event_id_do_not_block_each_other(self):
+        """
+        A missing id is not a shared id. Treating None as one would collapse
+        every question lacking provenance into a single slot.
+        """
+        r = asm.assemble("2026-08-13", full_bank())
+        assert len(r.questions) == asm.QUIZ_LENGTH

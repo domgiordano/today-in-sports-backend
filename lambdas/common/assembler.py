@@ -118,16 +118,34 @@ def assemble(quiz_date, questions, used_ids=None, mix=None):
         by_tier[q["tier"]].append(q)
 
     chosen, chosen_ids, chosen_sports = [], set(), set()
+    # Two questions from the same event must never share a quiz. They are
+    # different questionIds, so id-deduping alone lets them through, and one
+    # routinely answers the other: "Babe Ruth was sold to the New York Yankees,
+    # how much cash was involved" hands over the answer to "which team did the
+    # Red Sox send him to".
+    chosen_events = set()
+
+    def _take(q):
+        chosen.append(q)
+        chosen_ids.add(q["questionId"])
+        chosen_sports.add(q["sport"])
+        # A missing id is not a shared id. Recording None would make every
+        # question without provenance collide with every other one.
+        if q.get("sourceEventId"):
+            chosen_events.add(q["sourceEventId"])
+
+    def _free(q):
+        event = q.get("sourceEventId")
+        return not event or event not in chosen_events
 
     # Pass 1 — one question per tier, preferring an unrepresented sport.
     for slot in mix:
         tier = slot["tier"]
-        cands = [q for q in by_tier.get(tier, []) if q["questionId"] not in chosen_ids]
+        cands = [q for q in by_tier.get(tier, [])
+                 if q["questionId"] not in chosen_ids and _free(q)]
         pick = _best(cands, chosen_sports)
         if pick:
-            chosen.append(pick)
-            chosen_ids.add(pick["questionId"])
-            chosen_sports.add(pick["sport"])
+            _take(pick)
 
     # Pass 2 — a missing tier is filled from the nearest available one. A quiz
     # whose ladder is 1/2/3/3/5 still ascends; a four-question quiz does not
@@ -140,9 +158,9 @@ def assemble(quiz_date, questions, used_ids=None, mix=None):
                 break
             if q["questionId"] in chosen_ids:
                 continue
-            chosen.append(q)
-            chosen_ids.add(q["questionId"])
-            chosen_sports.add(q["sport"])
+            if not _free(q):
+                continue
+            _take(q)
             filled += 1
         if filled:
             relaxed.append("tier-ladder")
