@@ -7,6 +7,8 @@ question on a date a returning player has already seen, or promote an unapproved
 question to fill a gap.
 """
 
+import collections
+
 import pytest
 
 from lambdas.common import assembler as asm
@@ -161,3 +163,72 @@ class TestSameEvent:
         """
         r = asm.assemble("2026-08-13", full_bank())
         assert len(r.questions) == asm.QUIZ_LENGTH
+
+
+class TestFormatMix:
+    """
+    Sport variety alone does not stop a quiz being five multiple-choice prompts
+    in a row, and format monotony is what makes a daily game feel identical on
+    day two. The cap yields — but only after the polite sweep runs out.
+    """
+
+    def _bank(self, types, mmdd="08-13"):
+        out = []
+        for i, t in enumerate(types, start=1):
+            item = q(f"q{i}", min(i, 5), sport=f"s{i}", mmdd=mmdd)
+            item["type"] = t
+            out.append(item)
+        return out
+
+    def test_a_varied_bank_produces_a_varied_quiz(self):
+        bank = self._bank(["mc", "numeric", "ordering", "clue", "mc"])
+        r = asm.assemble("2026-08-13", bank)
+
+        counts = collections.Counter(x["type"] for x in r.questions)
+        assert max(counts.values()) <= asm.MAX_PER_TYPE
+        assert "format-mix" not in r.relaxed
+
+    def test_the_cap_scales_to_the_variety_the_bank_has(self):
+        """
+        Two formats cannot fill five slots at two apiece. A fixed cap would mark
+        every quiz relaxed and drown the days that genuinely went wrong.
+        """
+        assert asm._type_cap(self._bank(["mc"] * 5)) == 5          # one format
+        assert asm._type_cap(self._bank(["mc", "numeric"])) == 3   # two
+        assert asm._type_cap(
+            self._bank(["mc", "numeric", "ordering"])) == 2        # three
+        assert asm._type_cap(
+            self._bank(["mc", "numeric", "ordering", "clue", "map"])) == 2
+
+    def test_no_single_format_dominates_when_variety_exists(self):
+        # Six mc and three numeric: a naive picker would take five mc.
+        bank = self._bank(["mc"] * 6 + ["numeric"] * 3)
+        r = asm.assemble("2026-08-13", bank)
+
+        counts = collections.Counter(x["type"] for x in r.questions)
+        assert counts["mc"] <= asm._type_cap(bank)
+        assert counts["numeric"] >= 1, "a second format was available and unused"
+
+    def test_a_single_format_bank_still_produces_a_full_quiz(self):
+        """
+        Five multiple-choice questions is the honest best a single-format bank
+        can do, so it is not reported as a relaxed constraint - only as a
+        content observation.
+        """
+        bank = self._bank(["mc"] * 5)
+        r = asm.assemble("2026-08-13", bank)
+
+        assert len(r.questions) == asm.QUIZ_LENGTH
+        assert "format-mix" not in r.relaxed
+
+    def test_a_closer_is_placed_last_regardless_of_tier(self):
+        bank = self._bank(["clue", "mc", "numeric", "ordering", "mc"])
+        r = asm.assemble("2026-08-13", bank)
+
+        # The clue question is tier 1 and would otherwise open the quiz.
+        assert r.questions[-1]["type"] == "clue"
+
+    def test_the_format_mix_is_reported(self):
+        bank = self._bank(["mc", "numeric", "ordering", "clue", "mc"])
+        item = asm.assemble("2026-08-13", bank).to_item()
+        assert item["formatMix"]["mc"] == 2

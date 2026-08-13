@@ -11,8 +11,12 @@ descending order of how hard they are to give up:
      the format.
   3. **Sport mix.** Every quiz should span several sports so nobody gets five
      questions about a sport they don't follow.
+  4. **Format mix.** No more than two questions of the same type in a day.
+     Sport variety alone does not stop a quiz being five multiple-choice
+     prompts in a row, and format monotony is what makes a daily game feel the
+     same on day two as on day one.
 
-Constraint 3 is the one that yields. Thin calendar dates genuinely cannot
+Constraints 3 and 4 are the ones that yield. Thin calendar dates genuinely cannot
 satisfy a mix — nothing but baseball happened on many July dates, and nothing at
 all happened on some February ones. A quiz with a relaxed mix beats no quiz, so
 the assembler degrades and reports rather than failing.
@@ -39,6 +43,14 @@ DEFAULT_MIX = [
 # How many distinct sports a five-question quiz should ideally span.
 TARGET_DISTINCT_SPORTS = 3
 
+# How many questions of one type a five-question quiz may contain, when the
+# bank has the variety to support it.
+MAX_PER_TYPE = 2
+
+# Formats that work as a closer and read badly anywhere else: a clue ladder
+# opening a quiz gives away that clues exist before the player has settled in.
+CLOSER_TYPES = ("clue",)
+
 
 class AssemblyResult:
     def __init__(self, quiz_date, questions, warnings, relaxed):
@@ -57,6 +69,8 @@ class AssemblyResult:
             "questionIds": [q["questionId"] for q in self.questions],
             "status": "draft",
             "sportMix": dict(collections.Counter(q["sport"] for q in self.questions)),
+            "formatMix": dict(collections.Counter(
+                q.get("type") for q in self.questions)),
             "tierLadder": [q["tier"] for q in self.questions],
             "warnings": self.warnings,
             "relaxedConstraints": self.relaxed,
@@ -67,6 +81,23 @@ class AssemblyResult:
                 f"relaxed={self.relaxed} warnings={len(self.warnings)}>")
 
 
+def _type_cap(pool):
+    """
+    The per-format cap this pool can actually satisfy.
+
+    A fixed cap of two is unsatisfiable when the bank holds only two formats:
+    two plus two is four, and a quiz is five. Every quiz would then report a
+    relaxed constraint, which turns the warning into noise and hides the days
+    that genuinely went wrong.
+
+    So the cap scales to the variety available - three when only two formats
+    exist, two once there are three or more. It tightens on its own as new
+    formats land, without a threshold to remember to change.
+    """
+    distinct = len({q.get("type") for q in pool}) or 1
+    return max(MAX_PER_TYPE, -(-QUIZ_LENGTH // distinct))
+
+
 def _eligible(questions, mmdd, used_ids):
     return [q for q in questions
             if q.get("status") == "approved"
@@ -74,20 +105,26 @@ def _eligible(questions, mmdd, used_ids):
             and q["questionId"] not in used_ids]
 
 
-def _best(candidates, chosen_sports, prefer_new_sport=True):
+def _best(candidates, chosen_sports, chosen_types=None, prefer_new_sport=True):
     """
-    Pick the strongest candidate, preferring an unrepresented sport.
+    Pick the strongest candidate, preferring an unrepresented sport and format.
 
-    Ties break on notability where present, then on questionId so assembly is
-    deterministic — the same bank and date must always produce the same quiz.
+    Sport comes first because someone who does not follow a sport cannot answer
+    at all, whereas a repeated format is only dull. Ties break on notability
+    where present, then on questionId so assembly is deterministic — the same
+    bank and date must always produce the same quiz.
     """
     if not candidates:
         return None
 
+    chosen_types = chosen_types or collections.Counter()
+
     def key(q):
-        fresh = q["sport"] not in chosen_sports
+        fresh_sport = q["sport"] not in chosen_sports
+        fresh_type = chosen_types[q.get("type")] == 0
         return (
-            0 if (prefer_new_sport and fresh) else 1,
+            0 if (prefer_new_sport and fresh_sport) else 1,
+            0 if fresh_type else 1,
             -(q.get("notabilityScore") or 0),
             q["questionId"],
         )
@@ -125,10 +162,13 @@ def assemble(quiz_date, questions, used_ids=None, mix=None):
     # Red Sox send him to".
     chosen_events = set()
 
+    chosen_types = collections.Counter()
+
     def _take(q):
         chosen.append(q)
         chosen_ids.add(q["questionId"])
         chosen_sports.add(q["sport"])
+        chosen_types[q.get("type")] += 1
         # A missing id is not a shared id. Recording None would make every
         # question without provenance collide with every other one.
         if q.get("sourceEventId"):
@@ -138,12 +178,18 @@ def assemble(quiz_date, questions, used_ids=None, mix=None):
         event = q.get("sourceEventId")
         return not event or event not in chosen_events
 
+    type_cap = _type_cap(pool)
+
+    def _type_ok(q):
+        return chosen_types[q.get("type")] < type_cap
+
     # Pass 1 — one question per tier, preferring an unrepresented sport.
     for slot in mix:
         tier = slot["tier"]
         cands = [q for q in by_tier.get(tier, [])
-                 if q["questionId"] not in chosen_ids and _free(q)]
-        pick = _best(cands, chosen_sports)
+                 if q["questionId"] not in chosen_ids and _free(q)
+                 and _type_ok(q)]
+        pick = _best(cands, chosen_sports, chosen_types)
         if pick:
             _take(pick)
 
@@ -153,22 +199,48 @@ def assemble(quiz_date, questions, used_ids=None, mix=None):
     if len(chosen) < QUIZ_LENGTH:
         missing = QUIZ_LENGTH - len(chosen)
         filled = 0
-        for q in sorted(pool, key=lambda x: (x["tier"], x["questionId"])):
-            if filled == missing:
-                break
-            if q["questionId"] in chosen_ids:
-                continue
-            if not _free(q):
-                continue
-            _take(q)
-            filled += 1
+        over_type = 0
+
+        # Two sweeps: the first honours the format cap, the second ignores it.
+        # A quiz with three multiple-choice questions beats a four-question
+        # quiz, so the cap is a preference that yields, not a hard gate — but
+        # it only yields once the polite sweep has genuinely run out.
+        for honour_type_cap in (True, False):
+            while filled < missing:
+                cands = [q for q in pool
+                         if q["questionId"] not in chosen_ids
+                         and _free(q)
+                         and (not honour_type_cap or _type_ok(q))]
+                if not cands:
+                    break
+
+                # Same preference as pass 1, rather than raw tier order. Taking
+                # the first thing that fits produced quizzes with two nearly
+                # identical prompts in them - back-to-back Eredivisie scorelines
+                # - because the filler ignored the sport and format already on
+                # the board.
+                pick = _best(cands, chosen_sports, chosen_types)
+                if not honour_type_cap:
+                    over_type += 1
+                _take(pick)
+                filled += 1
+
         if filled:
             relaxed.append("tier-ladder")
             warnings.append(
                 f"only {QUIZ_LENGTH - filled} distinct tiers available; "
                 f"{filled} slot(s) filled from adjacent tiers")
+        if over_type:
+            relaxed.append("format-mix")
+            warnings.append(
+                f"{over_type} slot(s) exceeded the {MAX_PER_TYPE}-per-format "
+                f"cap; the bank for this date is short on format variety")
 
-    chosen.sort(key=lambda q: (q["tier"], q["questionId"]))
+    # Tier order is the format, with one exception: a closer stays last even if
+    # its tier would place it earlier. A clue ladder opening the quiz gives away
+    # that clues exist before the player has settled into answering.
+    chosen.sort(key=lambda q: (q.get("type") in CLOSER_TYPES,
+                               q["tier"], q["questionId"]))
 
     if len(chosen) < QUIZ_LENGTH:
         warnings.append(
