@@ -40,6 +40,23 @@ def clean(obj):
     return obj
 
 
+def load_events(path):
+    """
+    Read the corpus, whether it is JSONL or a JSON array.
+
+    `build_corpus.py` streams one event per line - the whole reason it can hold
+    155 seasons without running out of disk. Older dumps are a single array, and
+    both still turn up on disk, so both are accepted rather than making the
+    caller remember which is which.
+    """
+    with open(path) as f:
+        first = f.readline()
+        f.seek(0)
+        if first.lstrip().startswith("["):
+            return json.load(f)
+        return [json.loads(line) for line in f if line.strip()]
+
+
 def build_questions(events):
     """
     Route each event to the templates for its own sport.
@@ -90,7 +107,7 @@ def main():
     ap.add_argument("--limit", type=int)
     args = ap.parse_args()
 
-    events = json.load(open(args.events))
+    events = load_events(args.events)
     print(f"events loaded: {len(events)}")
     print("  by sport:", dict(collections.Counter(e["sport"] for e in events)))
 
@@ -156,19 +173,28 @@ def main():
     #
     # Only `draft` rows are touched. Anything approved, rejected or used carries
     # a human decision, and a reload has no business discarding that.
+    # Pruning is scoped to the sports this run actually rebuilt. The corpus file
+    # is often one sport - build_corpus.py emits MLB, and the winter sports come
+    # from their own ingest scripts - so an unscoped prune would treat every
+    # other sport's drafts as stale and delete inventory this run never had an
+    # opinion about.
     fresh_ids = {q["questionId"] for q in valid}
+    rebuilt_sports = {q["sport"] for q in valid}
+    print(f"pruning scoped to: {', '.join(sorted(rebuilt_sports))}")
+
     stale, last_key = [], None
     while True:
         kwargs = {
             "IndexName": constants.QUESTIONS_STATUS_INDEX,
             "KeyConditionExpression": Key("status").eq("draft"),
-            "ProjectionExpression": "questionId",
+            "ProjectionExpression": "questionId, sport",
         }
         if last_key:
             kwargs["ExclusiveStartKey"] = last_key
         resp = questions_table.query(**kwargs)
         stale.extend(i["questionId"] for i in resp.get("Items", [])
-                     if i["questionId"] not in fresh_ids)
+                     if i["questionId"] not in fresh_ids
+                     and i.get("sport") in rebuilt_sports)
         last_key = resp.get("LastEvaluatedKey")
         if not last_key:
             break
