@@ -126,6 +126,30 @@ def mark_served(identity, quiz_date, index):
     return resp.get("Attributes")
 
 
+def record_hint(identity, quiz_date, index):
+    """
+    Record that the player took the multiple-choice hint on this question.
+
+    Server-side, because the client must never be the source of truth for
+    something that changes the score. The options are only released through the
+    endpoint that calls this, so asking for them and admitting to asking are the
+    same action and cannot be separated.
+
+    Idempotent: asking twice is one hint, not two penalties.
+    """
+    resp = _table().update_item(
+        Key={"playId": session_key(identity, quiz_date)},
+        UpdateExpression="ADD hintsUsed :i",
+        ExpressionAttributeValues={":i": {int(index)}},
+        ReturnValues="ALL_NEW",
+    )
+    return resp.get("Attributes")
+
+
+def hint_used(session, index):
+    return int(index) in set(session.get("hintsUsed") or set())
+
+
 def elapsed_since_served(session):
     """Seconds between serving the question and now, or None if never served."""
     served = session.get("servedAt")

@@ -50,21 +50,29 @@ class TestAnswersNeverLeak:
         blob = json.dumps(pub)
         assert "answer" not in pub
         assert "distractors" not in pub
-        # The correct option does appear among the choices — that is the point —
-        # but nothing marks which one it is.
-        assert "Nolan Ryan" in pub["options"]
+        assert "Nolan Ryan" not in blob
         assert '"answer"' not in blob
 
-    def test_options_include_every_choice_exactly_once(self):
+    def test_options_are_withheld_until_the_hint_is_taken(self):
+        """
+        The choices are a scored hint, so they cannot ship with the question.
+        If the client already held them, whether the player looked would be a
+        fact only the client knew, and the score would rest on its honesty.
+        """
         pub = play_view.public_question(question(), 0, 5)
+        assert pub["options"] is None
+        assert pub["hintAvailable"] is True
+
+    def test_options_include_every_choice_exactly_once(self):
+        pub = play_view.public_question(question(), 0, 5, with_options=True)
         assert sorted(pub["options"]) == sorted(
             ["Nolan Ryan", "Stan Belinda", "Bruce Hurst", "Jose Mesa"])
+        # Once released, there is no further hint to offer.
+        assert pub["hintAvailable"] is False
 
     def test_option_order_is_stable_for_a_question(self):
         """Otherwise a refresh reshuffles and the answer can be inferred."""
-        first = play_view.public_question(question(), 0, 5)["options"]
-        second = play_view.public_question(question(), 0, 5)["options"]
-        assert first == second
+        assert play_view.options_for(question()) == play_view.options_for(question())
 
     def test_numeric_questions_expose_tolerance_but_not_the_number(self):
         pub = play_view.public_question(question(qtype="numeric"), 0, 5)

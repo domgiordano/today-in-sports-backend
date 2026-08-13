@@ -21,27 +21,40 @@ def today_utc():
     return datetime.now(timezone.utc).date().isoformat()
 
 
-def public_question(question, index, total):
+def options_for(question):
+    """
+    The shuffled choices for a multiple-choice question.
+
+    Order is derived from the question id so it is stable across a refresh.
+    Reshuffling on every request would let the answer be inferred by reloading
+    and watching which option moves.
+    """
+    if question.get("type") != "mc":
+        return None
+    return sorted(
+        [str(question["answer"])] + list(question.get("distractors") or []),
+        key=lambda o: hash((question["questionId"], o)) & 0xFFFF,
+    )
+
+
+def public_question(question, index, total, with_options=False):
     """
     Strip a question down to what a player may see.
 
     Everyone gets the identical daily quiz, so anything left in this payload is
-    effectively published to every player at once. The correct option ships
-    among the choices — that is unavoidable for multiple choice — but nothing
-    marks which one it is, and the answer field never travels.
+    effectively published to every player at once, and the answer field never
+    travels.
 
-    Option order is derived from the question id so it is stable across a
-    refresh. Reshuffling on every request would let the answer be inferred by
-    reloading and watching what moves.
+    Multiple-choice questions are served as free response by default: the
+    options are withheld and offered as a scored hint. That is why they cannot
+    ship in this payload — if the client already held them, "did you use the
+    hint" would be a question only the client could answer, and the score would
+    depend on the honesty of something we do not control.
     """
-    options = None
-    if question.get("type") == "mc":
-        options = sorted(
-            [str(question["answer"])] + list(question.get("distractors") or []),
-            key=lambda o: hash((question["questionId"], o)) & 0xFFFF,
-        )
+    show_options = with_options and question.get("type") == "mc"
 
     return {
+        "hintAvailable": question.get("type") == "mc" and not show_options,
         "index": index,
         "total": total,
         "questionId": question["questionId"],
@@ -50,7 +63,7 @@ def public_question(question, index, total):
         "prompt": question["prompt"],
         "sport": question["sport"],
         "league": question.get("league"),
-        "options": options,
+        "options": options_for(question) if show_options else None,
         "tolerance": (question.get("tolerance")
                       if question.get("type") == "numeric" else None),
     }

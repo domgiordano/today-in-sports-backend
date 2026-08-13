@@ -21,6 +21,8 @@ All timing is server-side. The client never reports how long it took, because
 the client is not a source of truth about anything.
 """
 
+from lambdas.common import answer_matching
+
 TIER_BASE = {1: 100, 2: 150, 3: 200, 4: 250, 5: 300}
 
 # Answer inside this and the time bonus is full.
@@ -36,6 +38,14 @@ MAX_BONUS_FRACTION = 0.25
 # Beyond this a numeric answer earns nothing, expressed as a multiple of the
 # question's tolerance.
 NUMERIC_ZERO_AT = 6.0
+
+# What a right answer is worth after taking the multiple-choice hint.
+#
+# High enough that taking it is not a wasted question - a player who needs the
+# options should still want to answer - and low enough that recalling the name
+# unaided is clearly the better play. Recognition is an easier task than recall,
+# and the scoring should say so.
+HINT_CREDIT = 0.6
 
 
 def base_value(tier):
@@ -92,12 +102,17 @@ def numeric_credit(answer, guess, tolerance):
     return max(0.0, 1.0 - (distance - unit) / (zero_at - unit))
 
 
-def grade(question, submitted, seconds):
+def grade(question, submitted, seconds, hint_used=False):
     """
     Grade one answer.
 
     Returns the awarded points, whether it was correct, and the credit fraction
     — the last so the UI can say "close" rather than only "wrong".
+
+    `hint_used` means the player asked for the multiple-choice options on a
+    question served as free response. It scales credit rather than gating the
+    answer: they still got it right, and the score records that they needed
+    help doing it.
     """
     base = base_value(question.get("tier"))
     qtype = question.get("type")
@@ -110,10 +125,14 @@ def grade(question, submitted, seconds):
         )
         correct = credit >= 1.0
     else:
-        expected = str(question.get("answer", "")).strip().lower()
-        got = str(submitted if submitted is not None else "").strip().lower()
-        correct = bool(expected) and expected == got
+        # Typed answers are matched generously — see answer_matching for why
+        # rejecting a correct answer is the failure that matters here.
+        correct, _ = answer_matching.match(
+            submitted, question.get("answer"), question.get("answerAliases"))
         credit = 1.0 if correct else 0.0
+
+    if hint_used:
+        credit *= HINT_CREDIT
 
     accuracy_points = round(base * credit)
 
@@ -128,6 +147,7 @@ def grade(question, submitted, seconds):
         "timeBonus": bonus,
         "correct": correct,
         "credit": round(credit, 3),
+        "hintUsed": bool(hint_used),
         "basePoints": base,
         "seconds": round(seconds, 2) if seconds is not None else None,
     }

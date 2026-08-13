@@ -73,9 +73,12 @@ def handler(event, context):
             message='question not found',
             handler=HANDLER, function='handler')
 
-    # Server-stamped elapsed time. The client is not consulted.
+    # Server-stamped elapsed time, and a hint flag read from the session rather
+    # than the request. The client is not consulted about anything that changes
+    # the score.
     seconds = plays_dynamo.elapsed_since_served(session)
-    result = scoring.grade(question, body.get('answer'), seconds)
+    used_hint = plays_dynamo.hint_used(session, index)
+    result = scoring.grade(question, body.get('answer'), seconds, used_hint)
 
     session = plays_dynamo.record_answer(identity, quiz_date, index, body.get('answer'), result)
 
@@ -87,6 +90,7 @@ def handler(event, context):
         'points': result['points'],
         'accuracyPoints': result['accuracyPoints'],
         'timeBonus': result['timeBonus'],
+        'hintUsed': result['hintUsed'],
         'seconds': result['seconds'],
         'totalPoints': int(session.get('totalPoints', 0)),
         # Revealed only now that the answer is locked in.

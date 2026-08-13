@@ -152,3 +152,50 @@ class TestMaxPossible:
             total = sum(scoring.grade(q, q["answer"], seconds=secs)["points"]
                         for q in questions)
             assert total <= best
+
+
+class TestHintLadder:
+    """
+    Multiple choice becomes a hint rather than the format. Recognition is an
+    easier act than recall and the scoring says so - but taking the hint must
+    still be worth doing, or nobody stuck on a question ever answers.
+    """
+
+    def _q(self, tier=3):
+        return {"type": "mc", "tier": tier, "answer": "Nolan Ryan"}
+
+    def test_the_hint_costs_a_fraction_of_the_credit(self):
+        clean = scoring.grade(self._q(), "Nolan Ryan", 5.0)
+        hinted = scoring.grade(self._q(), "Nolan Ryan", 5.0, hint_used=True)
+
+        assert hinted["points"] < clean["points"]
+        assert hinted["credit"] == round(scoring.HINT_CREDIT, 3)
+        assert hinted["correct"] is True, "it was still the right answer"
+
+    def test_taking_the_hint_still_beats_getting_it_wrong(self):
+        hinted = scoring.grade(self._q(), "Nolan Ryan", 5.0, hint_used=True)
+        wrong = scoring.grade(self._q(), "Bruce Hurst", 5.0)
+        assert hinted["points"] > wrong["points"]
+
+    def test_the_hint_does_not_rescue_a_wrong_answer(self):
+        r = scoring.grade(self._q(), "Bruce Hurst", 5.0, hint_used=True)
+        assert r["points"] == 0
+        assert r["correct"] is False
+
+    def test_a_typed_answer_is_matched_generously(self):
+        """A surname, a missing accent or one typo is still the right answer."""
+        for typed in ("Ryan", "ryan", "Nolan Ryan", "Nolan Rian"):
+            assert scoring.grade(self._q(), typed, 5.0)["correct"], typed
+
+    def test_the_hint_flag_is_reported(self):
+        assert scoring.grade(self._q(), "Ryan", 5.0)["hintUsed"] is False
+        assert scoring.grade(self._q(), "Ryan", 5.0, True)["hintUsed"] is True
+
+    def test_a_fast_hinted_answer_never_beats_a_slow_unaided_one(self):
+        """
+        The founding rule of this module, extended to the hint: help must cost
+        more than time saves, or the ladder becomes free.
+        """
+        fast_hinted = scoring.grade(self._q(), "Ryan", 0.0, hint_used=True)
+        slow_clean = scoring.grade(self._q(), "Ryan", 120.0)
+        assert slow_clean["points"] > fast_hinted["points"]
