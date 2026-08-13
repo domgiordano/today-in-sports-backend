@@ -45,11 +45,25 @@ def _now():
 
 
 def _bucket(status, error):
-    """Coarse outcome, which is what an operator filters on."""
-    if error or status >= 500:
+    """
+    Coarse outcome, which is what an operator filters on.
+
+    Status decides first, and deliberately so. Every handled 4xx carries an
+    error message, so treating any message as a failure put "no published quiz
+    for today" - an expected, correct 404 - in the same bucket as a genuine
+    500, made the rejected bucket unreachable, and would have buried real
+    faults under routine ones.
+
+    A message alongside a 2xx is still a failure: the handler recovered enough
+    to answer, but something went wrong worth keeping.
+    """
+    status = int(status or 0)
+    if status >= 500:
         return "error"
     if status >= 400:
         return "rejected"
+    if error:
+        return "error"
     return "ok"
 
 

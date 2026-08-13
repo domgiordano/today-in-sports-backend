@@ -36,6 +36,14 @@ def table():
     # An error message with a 200 is still an error: the handler recovered
     # enough to respond but something went wrong worth keeping.
     (200, "boom", "error"),
+    # Regression. Every handled 4xx carries a message, so bucketing on the
+    # message put an expected 404 - "no published quiz for today" - alongside
+    # genuine 500s and made the rejected bucket unreachable.
+    (404, "no published quiz for 2026-08-13", "rejected"),
+    (400, "deviceId is required", "rejected"),
+    (403, "Admin privileges required", "rejected"),
+    # A 5xx stays a failure whether or not a message came with it.
+    (500, "kaboom", "error"),
 ])
 def test_outcome_bucketing(status, error, expected):
     assert rl._bucket(status, error) == expected
