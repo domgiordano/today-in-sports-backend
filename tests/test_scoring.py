@@ -1,0 +1,154 @@
+"""
+Scoring tests.
+
+The first class is the one that matters. Everything else is calibration; that
+one is the product promise — this is a game about knowing sport, not about
+reflexes, and it stops being that the moment a fast guess outscores a
+considered right answer.
+"""
+
+import pytest
+
+from lambdas.common import scoring
+
+
+def mc(tier=3, answer="Nolan Ryan"):
+    return {"type": "mc", "tier": tier, "answer": answer,
+            "distractors": ["A", "B", "C"]}
+
+
+def numeric(tier=3, answer=19, tolerance=2):
+    return {"type": "numeric", "tier": tier, "answer": answer,
+            "numericAnswer": answer, "tolerance": tolerance}
+
+
+class TestFastWrongNeverBeatsSlowRight:
+    """The single property the whole design hangs on."""
+
+    def test_instant_wrong_scores_below_slow_right(self):
+        fast_wrong = scoring.grade(mc(), "A", seconds=0.5)
+        slow_right = scoring.grade(mc(), "Nolan Ryan", seconds=120)
+        assert fast_wrong["points"] < slow_right["points"]
+
+    def test_a_wrong_answer_earns_nothing_at_all(self):
+        assert scoring.grade(mc(), "A", seconds=0.1)["points"] == 0
+
+    def test_holds_across_every_tier_pairing(self):
+        """Even a tier-5 miss must lose to a tier-1 hit taken slowly."""
+        for wrong_tier in (1, 2, 3, 4, 5):
+            fast_wrong = scoring.grade(mc(tier=wrong_tier), "A", seconds=0.1)
+            slow_right = scoring.grade(mc(tier=1), "Nolan Ryan", seconds=300)
+            assert fast_wrong["points"] < slow_right["points"]
+
+    def test_a_partial_answer_loses_to_an_exact_one_however_fast(self):
+        """
+        Note the guess has to be *outside* tolerance to be partial at all. An
+        answer within tolerance is correct by definition, so beating a slower
+        correct answer is the time bonus doing its job, not a violation.
+        """
+        partial_fast = scoring.grade(numeric(), 24, seconds=1)   # tolerance is 2
+        exact_slow = scoring.grade(numeric(), 19, seconds=90)
+        assert partial_fast["credit"] < 1.0, "guess should be outside tolerance"
+        assert partial_fast["points"] < exact_slow["points"]
+
+    def test_within_tolerance_counts_as_correct(self):
+        """Tolerance is the whole point of a closest-guess question."""
+        assert scoring.grade(numeric(), 21, seconds=5)["correct"] is True
+
+
+class TestTimeBonus:
+    def test_full_inside_the_grace_window(self):
+        base = scoring.base_value(3)
+        assert scoring.time_bonus(base, 0) == scoring.time_bonus(base, 9.9)
+
+    def test_decays_after_the_grace_window(self):
+        base = scoring.base_value(3)
+        assert scoring.time_bonus(base, 20) < scoring.time_bonus(base, 5)
+
+    def test_never_reaches_zero(self):
+        """A long think should cost a little, not everything."""
+        base = scoring.base_value(3)
+        assert scoring.time_bonus(base, 600) > 0
+        assert scoring.time_bonus(base, 10_000) > 0
+
+    def test_capped_so_speed_cannot_out_earn_correctness(self):
+        base = scoring.base_value(5)
+        assert scoring.time_bonus(base, 0) <= base * scoring.MAX_BONUS_FRACTION
+
+    def test_missing_timing_is_treated_as_slow_not_instant(self):
+        """A client that reports nothing must not be rewarded for it."""
+        base = scoring.base_value(3)
+        assert scoring.time_bonus(base, None) < scoring.time_bonus(base, 0)
+
+
+class TestNumericPartialCredit:
+    def test_exact_is_full(self):
+        assert scoring.numeric_credit(19, 19, 2) == 1.0
+
+    def test_inside_tolerance_is_full(self):
+        assert scoring.numeric_credit(19, 21, 2) == 1.0
+        assert scoring.numeric_credit(19, 17, 2) == 1.0
+
+    def test_credit_falls_away_with_distance(self):
+        near = scoring.numeric_credit(19, 24, 2)
+        far = scoring.numeric_credit(19, 30, 2)
+        assert 0 < near
+        assert near > far
+
+    def test_far_enough_is_worthless(self):
+        assert scoring.numeric_credit(19, 500, 2) == 0.0
+
+    def test_zero_tolerance_still_rewards_being_close(self):
+        """
+        Otherwise "off by one" and "off by fifty" score identically, which
+        defeats the purpose of asking for a number.
+        """
+        close = scoring.numeric_credit(300, 301, 0)
+        far = scoring.numeric_credit(300, 350, 0)
+        assert close > far
+
+    def test_a_non_numeric_guess_scores_zero_rather_than_raising(self):
+        assert scoring.numeric_credit(19, "nineteen", 2) == 0.0
+        assert scoring.numeric_credit(19, None, 2) == 0.0
+
+
+class TestGrading:
+    def test_multiple_choice_is_case_and_space_insensitive(self):
+        assert scoring.grade(mc(), "  nolan ryan  ", seconds=5)["correct"] is True
+
+    def test_higher_tiers_are_worth_more(self):
+        low = scoring.grade(mc(tier=1), "Nolan Ryan", seconds=5)
+        high = scoring.grade(mc(tier=5), "Nolan Ryan", seconds=5)
+        assert high["points"] > low["points"]
+
+    def test_partial_credit_scales_the_bonus_too(self):
+        """A half-right answer should not collect a whole speed bonus."""
+        partial = scoring.grade(numeric(), 24, seconds=1)
+        full = scoring.grade(numeric(), 19, seconds=1)
+        assert 0 < partial["timeBonus"] < full["timeBonus"]
+
+    def test_no_answer_scores_zero(self):
+        assert scoring.grade(mc(), None, seconds=5)["points"] == 0
+
+    def test_result_explains_itself(self):
+        r = scoring.grade(numeric(), 20, seconds=12)
+        assert r["points"] == r["accuracyPoints"] + r["timeBonus"]
+        assert 0 <= r["credit"] <= 1
+        assert r["basePoints"] == scoring.base_value(3)
+
+
+class TestMaxPossible:
+    def test_perfect_run_is_the_sum_of_base_plus_full_bonus(self):
+        questions = [mc(tier=t) for t in (1, 2, 3, 4, 5)]
+        best = scoring.max_possible(questions)
+        actual = sum(scoring.grade(q, q["answer"], seconds=1)["points"]
+                     for q in questions)
+        assert actual == best
+
+    def test_no_real_run_can_exceed_it(self):
+        questions = [mc(tier=t) for t in (1, 2, 3, 4, 5)]
+        best = scoring.max_possible(questions)
+        for secs in (0, 0.1, 5, 30, 120):
+            total = sum(scoring.grade(q, q["answer"], seconds=secs)["points"]
+                        for q in questions)
+            assert total <= best

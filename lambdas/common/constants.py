@@ -25,6 +25,9 @@ EVENTS_TABLE_NAME = os.environ.get("EVENTS_TABLE_NAME", f"{APP_NAME}-events")
 QUESTIONS_TABLE_NAME = os.environ.get("QUESTIONS_TABLE_NAME", f"{APP_NAME}-questions")
 QUIZZES_TABLE_NAME = os.environ.get("QUIZZES_TABLE_NAME", f"{APP_NAME}-quizzes")
 SOURCE_RUNS_TABLE_NAME = os.environ.get("SOURCE_RUNS_TABLE_NAME", f"{APP_NAME}-source-runs")
+# Play sessions: one per identity per quiz date. Holds server-stamped timing and
+# graded answers -- the client never posts a score.
+PLAYS_TABLE_NAME = os.environ.get("PLAYS_TABLE_NAME", f"{APP_NAME}-plays")
 
 # Indexes
 QUESTIONS_STATUS_INDEX = os.environ.get("QUESTIONS_STATUS_INDEX", "status-mmdd-index")
