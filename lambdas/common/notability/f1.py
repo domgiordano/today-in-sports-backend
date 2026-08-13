@@ -38,6 +38,9 @@ def _base(race, reason, score, title, facts):
 def _facts(race):
     w = race.get("winner") or {}
     return {
+        # Carried so a map question knows where the race was held. The source
+        # has always emitted it; the facts simply dropped it on the floor.
+        "circuitId": race.get("circuitId"),
         "grandPrix": race.get("grandPrix"),
         "officialName": race.get("officialName"),
         "round": race.get("round"),

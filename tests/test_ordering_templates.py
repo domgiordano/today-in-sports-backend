@@ -120,7 +120,6 @@ def test_the_most_revealing_clue_comes_last():
     than the rung before it. Trimming happens in the middle.
     """
     q = tpl.clue_ladder(_event(1971))[0]
-    assert "1970s" in q["clues"][0]
     assert "August" in q["clues"][-1]
     assert len(q["clues"]) <= tpl.MAX_CLUES
 
@@ -151,6 +150,16 @@ def test_validation_rejects_a_short_ladder():
     assert any("clues" in p for p in tpl.validate(q))
 
 
+def test_the_first_clue_anchors_the_question_to_this_date():
+    """
+    The ladder opened with "This happened in the 1900s", which anchors nothing
+    - the answer could be any player in the history of the sport, and the
+    question did not feel like it belonged to the day it was asked on.
+    """
+    q = tpl.clue_ladder(_event(1971))[0]
+    assert q["clues"][0].startswith("On this date")
+
+
 def test_a_ladder_of_only_era_and_date_is_rejected():
     """
     Regression. The first version produced 5,686 questions reading "This
@@ -169,7 +178,7 @@ def test_a_ladder_says_what_the_person_actually_did():
 
     q = tpl.clue_ladder(e)[0]
     joined = " ".join(q["clues"])
-    assert "100th win" in joined
+    assert "100th game of his career" in joined
     # And exactly once: stating the milestone and then restating it as a career
     # total spends two rungs on one fact.
     assert "won 100 games" not in joined
@@ -182,7 +191,7 @@ def test_a_career_ladder_carries_its_numbers():
 
     clues = tpl.clue_ladder(e)[0]["clues"]
     joined = " ".join(clues)
-    assert "last game" in joined
+    assert "career ended" in joined
     assert "686 starts" in joined and "17 seasons" in joined
 
 

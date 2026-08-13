@@ -52,6 +52,12 @@ HINT_CREDIT = 0.6
 # and a question that becomes worthless is one people stop finishing.
 CLUE_FLOOR = 0.25
 
+# Map questions. Full credit for landing within this many kilometres of the
+# venue - roughly "the right city" - falling away to nothing at the far bound.
+# A continental-scale miss should be worth zero, not a consolation.
+MAP_FULL_CREDIT_KM = 50.0
+MAP_ZERO_AT_KM = 2000.0
+
 
 def base_value(tier):
     return TIER_BASE.get(int(tier or 1), TIER_BASE[1])
@@ -105,6 +111,45 @@ def numeric_credit(answer, guess, tolerance):
     if distance >= zero_at:
         return 0.0
     return max(0.0, 1.0 - (distance - unit) / (zero_at - unit))
+
+
+def haversine_km(lat1, lng1, lat2, lng2):
+    """Great-circle distance in kilometres."""
+    import math
+
+    radius = 6371.0
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    dp = math.radians(lat2 - lat1)
+    dl = math.radians(lng2 - lng1)
+    a = (math.sin(dp / 2) ** 2
+         + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2)
+    return 2 * radius * math.asin(min(1.0, math.sqrt(a)))
+
+
+def map_credit(answer, submitted):
+    """
+    Fraction earned by a tap on the map, from great-circle distance.
+
+    The same closest-guess mechanic as a numeric question, in two dimensions:
+    the right city is full marks, and being on the wrong continent is worth
+    nothing rather than a participation fraction.
+    """
+    try:
+        alat, alng = float(answer["lat"]), float(answer["lng"])
+        glat, glng = float(submitted["lat"]), float(submitted["lng"])
+    except (TypeError, ValueError, KeyError, IndexError):
+        return 0.0
+
+    if not (-90 <= glat <= 90 and -180 <= glng <= 180):
+        return 0.0
+
+    distance = haversine_km(alat, alng, glat, glng)
+    if distance <= MAP_FULL_CREDIT_KM:
+        return 1.0
+    if distance >= MAP_ZERO_AT_KM:
+        return 0.0
+    span = MAP_ZERO_AT_KM - MAP_FULL_CREDIT_KM
+    return max(0.0, 1.0 - (distance - MAP_FULL_CREDIT_KM) / span)
 
 
 def ordering_credit(answer, submitted):
@@ -169,7 +214,10 @@ def grade(question, submitted, seconds, hint_used=False, clues_taken=0):
     base = base_value(question.get("tier"))
     qtype = question.get("type")
 
-    if qtype == "ordering":
+    if qtype == "map":
+        credit = map_credit(question.get("answer"), submitted)
+        correct = credit >= 1.0
+    elif qtype == "ordering":
         credit = ordering_credit(question.get("answer"), submitted)
         # Full marks means every pair in the right place, not merely a good try.
         correct = credit >= 1.0

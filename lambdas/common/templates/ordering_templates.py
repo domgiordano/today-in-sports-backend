@@ -135,10 +135,13 @@ def _label(event):
 # except the first two comes from a fact the corpus actually holds about the
 # person, and a ladder without at least two of them is rejected outright.
 CLUE_BUILDERS = [
-    lambda e, f: (f"This happened in {_decade(e['year'])}."
-                  if e.get("year") else None),
-    lambda e, f: (f"The sport was {_sport_label(e)}." if e.get("sport") else None),
+    # The achievement first, and explicitly on this date. Opening with the
+    # decade anchored nothing - the answer could be any player in the history
+    # of the sport, and the question did not feel like it belonged to the day
+    # it was being asked on.
     lambda e, f: _what_happened(e, f),
+    lambda e, f: (f"It was {_sport_label(e)}, {_decade(e['year'])}."
+                  if e.get("year") else None),
     lambda e, f: _by_the_numbers(e, f),
     lambda e, f: (f"One of the clubs involved was the {_club(f)}."
                   if _club(f) else None),
@@ -150,7 +153,7 @@ CLUE_BUILDERS = [
 
 # Clues that identify nothing on their own. A ladder made only of these is
 # unanswerable however many rungs it has.
-GENERIC_PREFIXES = ("This happened in", "The sport was", "It happened on")
+GENERIC_PREFIXES = ("It was ", "It happened on")
 
 
 def _what_happened(event, facts):
@@ -159,23 +162,34 @@ def _what_happened(event, facts):
 
     if reason == "pitcher_win_milestone":
         wins = facts.get("careerWins")
-        return f"He reached a career milestone: his {wins}th win." if wins else None
+        return (f"On this date, a pitcher won the {_ordinal(wins)} game of his "
+                f"career." if wins else None)
     if reason == "player_debut":
-        return "This was his first appearance in the major leagues."
+        return "On this date, a future star played his first major league game."
     if reason == "player_finale":
-        return "This was the last game he ever played."
+        return "On this date, a long career ended with a final appearance."
     if reason in ("star_trade", "blockbuster_trade"):
         count = facts.get("playerCount") or 0
         if count > 2:
-            return f"He was the headline name in a {count}-player trade."
-        return "He was traded."
+            return (f"On this date, he was the headline name in a "
+                    f"{count}-player trade.")
+        return "On this date, he was traded."
     if reason == "star_purchase":
-        return "He was sold outright, for cash."
+        return "On this date, he was sold outright, for cash."
     if reason == "star_free_agent":
-        return "He signed as a free agent."
+        return "On this date, he signed as a free agent."
     if reason == "star_drafted":
-        return "He was selected in a draft."
+        return "On this date, he was selected in a draft."
     return None
+
+
+def _ordinal(n):
+    n = int(n)
+    if 10 <= n % 100 <= 20:
+        suffix = "th"
+    else:
+        suffix = {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
+    return f"{n}{suffix}"
 
 
 def _club(facts):
@@ -261,7 +275,7 @@ def clue_ladder(event, ctx=None):
     if any(answer.lower() in c.lower() for c in clues):
         return []
 
-    prompt = "Who is this? Take a clue at a time — each one costs you points."
+    prompt = ("Who is this? Every clue you take is worth fewer points.")
 
     return [_q(event, "clue", prompt, answer,
                clues=clues, clueCount=len(clues))]

@@ -99,6 +99,10 @@ def handler(event, context):
         # Revealed only now that the answer is locked in.
         'correctAnswer': question.get('answer'),
         'sourceUrl': question.get('sourceDatasetRef'),
+        # Where a map question's pin actually was, and what it is called. Held
+        # back until this point for the same reason the coordinate is.
+        'venueName': question.get('venueName'),
+        'venuePlace': question.get('venuePlace'),
     }
 
     next_index = index + 1

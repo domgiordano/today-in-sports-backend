@@ -26,6 +26,7 @@ from decimal import Decimal
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from lambdas.common import constants                              # noqa: E402
+from lambdas.common.templates import map_templates as map_tpl     # noqa: E402
 from lambdas.common.templates import mlb_templates as mlb_tpl     # noqa: E402
 from lambdas.common.templates import ordering_templates as ord_tpl  # noqa: E402
 from lambdas.common.templates import transaction_templates as tran_tpl  # noqa: E402
@@ -73,7 +74,7 @@ def status_for(question_id, decided):
     return decided.get(question_id, "draft")
 
 
-def build_questions(events):
+def build_questions(events, circuits=None):
     """
     Route each event to the templates for its own sport.
 
@@ -118,6 +119,12 @@ def build_questions(events):
     # an ordering question is a comparison between events sharing a calendar
     # day, which is the one thing every source has in common.
     questions.extend(ord_tpl.generate(events))
+
+    # Map questions need circuit coordinates, which only the f1db dump has. No
+    # circuits loaded means no map questions, rather than questions pointing at
+    # a place we guessed.
+    if circuits:
+        questions.extend(map_tpl.generate(events, map_tpl.build_context(circuits)))
     return questions
 
 
@@ -126,13 +133,20 @@ def main():
     ap.add_argument("--events", required=True)
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--limit", type=int)
+    ap.add_argument("--f1-cache", help="extracted f1db dump, for map questions")
     args = ap.parse_args()
 
     events = load_events(args.events)
     print(f"events loaded: {len(events)}")
     print("  by sport:", dict(collections.Counter(e["sport"] for e in events)))
 
-    questions = build_questions(events)
+    circuits = {}
+    if args.f1_cache:
+        from lambdas.common.sources import f1db
+        circuits = f1db.load_circuits(args.f1_cache)
+        print(f"circuits with coordinates: {len(circuits)}")
+
+    questions = build_questions(events, circuits)
     valid, rejected = [], 0
     reasons = collections.Counter()
     for q in questions:
@@ -141,8 +155,8 @@ def main():
         # ordering question's items are a permutation of its answer, and
         # running everything through it would wave those questions straight
         # past the checks written for them.
-        checker = (ord_tpl.validate
-                   if q["type"] in ("ordering", "clue")
+        checker = (map_tpl.validate if q["type"] == "map"
+                   else ord_tpl.validate if q["type"] in ("ordering", "clue")
                    else mlb_tpl.validate)
         problems = checker(q)
         if problems:

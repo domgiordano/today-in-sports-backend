@@ -68,6 +68,36 @@ def _read(cache_dir, name):
         return list(csv.DictReader(f))
 
 
+def load_circuits(cache_dir):
+    """
+    Circuit id to name, place and coordinates.
+
+    f1db ships latitude and longitude for every circuit it knows, which is what
+    makes a "where was this race" question answerable by rule rather than by
+    someone typing coordinates in by hand. No geocoding, no third-party lookup,
+    and the same dump that supplies the race supplies the location.
+    """
+    rows = _read(cache_dir, "f1db-circuits.csv")
+    out = {}
+    for row in rows:
+        lat, lng = row.get("latitude"), row.get("longitude")
+        if not lat or not lng:
+            continue
+        try:
+            lat, lng = float(lat), float(lng)
+        except ValueError:
+            continue
+        out[row["id"]] = {
+            "circuitId": row["id"],
+            "name": row.get("fullName") or row.get("name"),
+            "place": row.get("placeName"),
+            "country": row.get("countryId"),
+            "lat": lat,
+            "lng": lng,
+        }
+    return out
+
+
 def _int(v):
     try:
         return int(v)

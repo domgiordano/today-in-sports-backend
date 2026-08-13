@@ -219,3 +219,30 @@ class TestNoCrossLambdaImports:
                 if m and m.group(1) != own and m.group(1) != "common":
                     offenders.append(f"{own} imports {m.group(1)}")
         assert not offenders, "cross-lambda imports: " + ", ".join(offenders)
+
+
+class TestMapQuestionsLeakNothing:
+    """
+    A map question's answer is a coordinate, so the venue name, its town and
+    its country are all answers too. None of them may travel with the question.
+    """
+
+    def _q(self):
+        return {
+            "questionId": "m1", "type": "map", "tier": 3,
+            "prompt": "Tap where you think the circuit is.",
+            "sport": "f1", "league": "Formula One",
+            "answer": {"lat": 45.6206, "lng": 9.2894},
+            "venueName": "Autodromo Nazionale Monza",
+            "venuePlace": "Monza", "venueCountry": "italy",
+        }
+
+    def test_no_part_of_the_location_is_served(self):
+        blob = json.dumps(play_view.public_question(self._q(), 0, 5))
+        for leak in ("45.6", "9.28", "Monza", "Autodromo", "italy"):
+            assert leak not in blob, f"{leak} leaked in the question payload"
+
+    def test_the_prompt_still_survives(self):
+        pub = play_view.public_question(self._q(), 0, 5)
+        assert pub["type"] == "map"
+        assert "Tap where" in pub["prompt"]

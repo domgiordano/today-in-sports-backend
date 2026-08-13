@@ -67,6 +67,9 @@ def public_question(question, index, total, with_options=False,
         # Ordering items are shuffled at generation time and stored that way,
         # so the order here carries no signal about the answer.
         "items": list(question.get("items") or []) if qtype == "ordering" else None,
+        # A map question's answer IS a coordinate, so nothing about the venue
+        # can travel with the question - not the name, not the country, not a
+        # bounding box. All of it is revealed only once the answer is locked in.
         "clues": clues,
         "clueCount": question.get("clueCount") if qtype == "clue" else None,
         "cluesTaken": int(clues_taken) if qtype == "clue" else None,

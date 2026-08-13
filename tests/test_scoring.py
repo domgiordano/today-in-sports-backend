@@ -262,3 +262,57 @@ class TestClueLadder:
         assert early["points"] > late["points"]
         assert late["points"] > 0
         assert late["correct"] is True
+
+
+class TestMapCredit:
+    """
+    The closest-guess mechanic in two dimensions. Monza is the reference point
+    throughout - a real circuit with real coordinates from the f1db dump.
+    """
+
+    MONZA = {"lat": 45.6206, "lng": 9.2894}
+
+    def test_landing_on_the_venue_is_full_credit(self):
+        assert scoring.map_credit(self.MONZA, self.MONZA) == 1.0
+
+    def test_the_right_city_is_full_credit(self):
+        """Milan is ~15km from Monza. Nobody should lose points for that."""
+        assert scoring.map_credit(self.MONZA, {"lat": 45.46, "lng": 9.19}) == 1.0
+
+    def test_the_wrong_continent_earns_nothing(self):
+        assert scoring.map_credit(self.MONZA, {"lat": 40.7, "lng": -74.0}) == 0.0
+
+    def test_a_near_miss_scores_partial(self):
+        # Zurich, roughly 220km away.
+        credit = scoring.map_credit(self.MONZA, {"lat": 47.37, "lng": 8.54})
+        assert 0 < credit < 1
+
+    def test_closer_always_scores_higher(self):
+        near = scoring.map_credit(self.MONZA, {"lat": 46.5, "lng": 9.3})
+        far = scoring.map_credit(self.MONZA, {"lat": 50.0, "lng": 9.3})
+        assert near > far
+
+    @pytest.mark.parametrize("guess", [
+        {"lat": 200, "lng": 0},        # off the globe
+        {"lat": 0, "lng": 999},
+        {"lat": "x", "lng": "y"},
+        {},
+        None,
+    ])
+    def test_nonsense_coordinates_earn_nothing(self, guess):
+        assert scoring.map_credit(self.MONZA, guess) == 0.0
+
+    def test_haversine_matches_a_known_distance(self):
+        """
+        Monza to Silverstone, both from the f1db dump: about 1,040km. Roughly
+        718km of latitude and 750km of longitude at that latitude, which is a
+        useful sanity check that the cosine term is being applied at all - drop
+        it and the answer comes out far too large.
+        """
+        km = scoring.haversine_km(45.6206, 9.2894, 52.0786, -1.0169)
+        assert 1000 < km < 1080
+
+    def test_grading_a_map_question(self):
+        q = {"type": "map", "tier": 3, "answer": self.MONZA}
+        assert scoring.grade(q, self.MONZA, 5.0)["correct"] is True
+        assert scoring.grade(q, {"lat": 40.7, "lng": -74.0}, 5.0)["points"] == 0
