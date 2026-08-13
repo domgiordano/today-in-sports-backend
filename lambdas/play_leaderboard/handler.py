@@ -10,8 +10,8 @@ board is low stakes, and the alternative is refusing to show a visitor their own
 result. Persistent profiles and streaks are what require an account.
 """
 
-from lambdas.common import plays_dynamo
-from lambdas.common.errors import handle_errors
+from lambdas.common import groups_dynamo, plays_dynamo
+from lambdas.common.errors import NotFoundError, handle_errors
 from lambdas.common.logger import get_logger
 from lambdas.common.utility_helpers import get_query_params, success_response
 from lambdas.common.play_view import today_utc
@@ -39,7 +39,24 @@ def handler(event, context):
     quiz_date = params.get('quizDate') or today_utc()
     limit = int(params.get('limit', DEFAULT_LIMIT))
 
-    rows = plays_dynamo.leaderboard(quiz_date, limit)
+    # A group board is the same day's scores with a membership filter, not a
+    # separate scoring system. It is fetched deeper than it is shown, because
+    # a group of ten can easily sit outside the global top fifty and would
+    # otherwise come back empty.
+    group_id = params.get('groupId')
+    group = None
+    if group_id:
+        group = groups_dynamo.get_group(group_id)
+        if not group:
+            raise NotFoundError(
+                message='no such group', handler=HANDLER, function='handler')
+
+    if group:
+        rows = plays_dynamo.sessions_for(
+            group.get('memberIds') or set(), quiz_date)[:limit]
+    else:
+        rows = plays_dynamo.leaderboard(quiz_date, limit)
+
     board = [public_row(r, i + 1) for i, r in enumerate(rows)]
 
     # A caller can ask where a specific score would land without being on the
@@ -67,4 +84,6 @@ def handler(event, context):
         'leaderboard': board,
         'players': len(board),
         'you': you,
+        'scope': 'group' if group else 'global',
+        'groupName': group.get('name') if group else None,
     })

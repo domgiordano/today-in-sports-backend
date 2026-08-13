@@ -291,6 +291,25 @@ def leaderboard(quiz_date, limit=50):
     return rows
 
 
+def sessions_for(identities, quiz_date):
+    """
+    Completed sessions for named players on a day, highest score first.
+
+    Deliberately not "filter the global board": that query is capped at 200
+    rows, so a group member sitting outside the global top 200 would silently
+    vanish from their own group's board - the smaller the group, the more
+    likely, which is exactly backwards. A group is at most fifty people, so
+    fetching each session by key is both exact and cheap.
+    """
+    rows = []
+    for identity in identities or ():
+        session = get_session(identity, quiz_date)
+        if session and session.get("completedAt"):
+            rows.append(session)
+    rows.sort(key=lambda r: -int(r.get("totalPoints") or 0))
+    return rows
+
+
 def rank_for(quiz_date, total_points):
     """
     How many finished players scored higher.

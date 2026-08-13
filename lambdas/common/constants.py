@@ -31,6 +31,8 @@ PLAYS_TABLE_NAME = os.environ.get("PLAYS_TABLE_NAME", f"{APP_NAME}-plays")
 USERS_TABLE_NAME = os.environ.get("USERS_TABLE_NAME", f"{APP_NAME}-users")
 GROUPS_TABLE_NAME = os.environ.get("GROUPS_TABLE_NAME", f"{APP_NAME}-groups")
 GROUPS_INVITE_INDEX = os.environ.get("GROUPS_INVITE_INDEX", "invite-index")
+ANNOUNCEMENTS_TABLE_NAME = os.environ.get(
+    "ANNOUNCEMENTS_TABLE_NAME", f"{APP_NAME}-announcements")
 
 # Indexes
 QUESTIONS_STATUS_INDEX = os.environ.get("QUESTIONS_STATUS_INDEX", "status-mmdd-index")
