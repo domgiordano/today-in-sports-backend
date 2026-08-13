@@ -233,6 +233,7 @@ def build_context(events):
     postseason game was on.
     """
     nhl_teams, f1_drivers, nfl_teams = [], [], []
+    nba_teams, soccer_clubs = [], []
     for e in events:
         f = e.get("facts") or {}
         if e["sport"] == "nhl":
@@ -241,13 +242,21 @@ def build_context(events):
             f1_drivers.append(f.get("winner"))
         elif e["sport"] == "nfl":
             nfl_teams += [f.get("winningTeam"), f.get("losingTeam")]
+        elif e["sport"] == "nba":
+            nba_teams += [f.get("winningTeam"), f.get("losingTeam")]
+        elif e["sport"] == "soccer":
+            soccer_clubs += [f.get("champion"), f.get("runnerUp"),
+                             f.get("winningTeam"), f.get("losingTeam"),
+                             f.get("homeTeam"), f.get("awayTeam")]
 
     def uniq(xs):
         return list(dict.fromkeys(x for x in xs if x))
 
     return {"nhl_teams": uniq(nhl_teams),
             "f1_drivers": uniq(f1_drivers),
-            "nfl_teams": uniq(nfl_teams)}
+            "nfl_teams": uniq(nfl_teams),
+            "nba_teams": uniq(nba_teams),
+            "soccer_clubs": uniq(soccer_clubs)}
 
 
 def generate(events, ctx=None):
@@ -257,3 +266,118 @@ def generate(events, ctx=None):
         for tpl in TEMPLATES:
             out.extend(tpl(ev, ctx))
     return out
+
+
+# ---------------------------------------------------------------- basketball
+
+def nba_late_playoff_winner(event, ctx):
+    if event["sport"] != "nba" or event["reason"] != "nba_late_playoff":
+        return []
+    f = event["facts"]
+    pool = _pick(ctx.get("nba_teams", []), {f["winningTeam"], f["losingTeam"]}, 3)
+    if len(pool) < 3:
+        return []
+    # The free-tier payload never names the round, so this says "playoffs"
+    # rather than claiming a Finals game -- see notability/nba.py.
+    return [_q(event, "mc",
+               f"In the {event['year']} NBA playoffs, a game on "
+               f"{pretty_date(event['gameDate'])} finished "
+               f"{f['winningScore']}-{f['losingScore']}. Who won it?",
+               f["winningTeam"], distractors=pool)]
+
+
+def nba_blowout_margin(event, ctx):
+    if event["sport"] != "nba" or event["reason"] not in ("nba_blowout",
+                                                          "nba_playoff_blowout"):
+        return []
+    f = event["facts"]
+    margin = f.get("margin")
+    if not margin:
+        return []
+    return [_q(event, "numeric",
+               f"On {pretty_date(event['gameDate'])}, the {f['winningTeam']} "
+               f"routed the {f['losingTeam']} {f['winningScore']}-"
+               f"{f['losingScore']}. What was the margin?",
+               margin, numericAnswer=margin, tolerance=4)]
+
+
+def nba_combined_points(event, ctx):
+    if event["sport"] != "nba" or event["reason"] not in ("nba_shootout",
+                                                          "nba_low_score"):
+        return []
+    f = event["facts"]
+    total = f.get("combinedPoints")
+    if not total:
+        return []
+    low = event["reason"] == "nba_low_score"
+    return [_q(event, "numeric",
+               f"The {f['winningTeam']} and {f['losingTeam']} met on "
+               f"{pretty_date(event['gameDate'])} in a famously "
+               f"{'low' if low else 'high'}-scoring game. How many points did "
+               f"the two teams score between them?",
+               total, numericAnswer=total, tolerance=8)]
+
+
+# -------------------------------------------------------------------- soccer
+
+def soccer_title_winner(event, ctx):
+    if event["sport"] != "soccer" or event["reason"] != "soccer_title_clinched":
+        return []
+    f = event["facts"]
+    pool = _pick(ctx.get("soccer_clubs", []), {f["champion"], f.get("runnerUp")}, 3)
+    if len(pool) < 3:
+        return []
+    return [_q(event, "mc",
+               f"Which club clinched the {f['competition']} title on "
+               f"{pretty_date(event['gameDate'])}?",
+               f["champion"], distractors=pool)]
+
+
+def soccer_title_margin(event, ctx):
+    if event["sport"] != "soccer" or event["reason"] != "soccer_title_clinched":
+        return []
+    f = event["facts"]
+    left = f.get("matchesRemaining")
+    if left is None:
+        return []
+    return [_q(event, "numeric",
+               f"{f['champion']} sealed the {f['competition']} on "
+               f"{pretty_date(event['gameDate'])}. How many matches did the "
+               f"runner-up still have left to play?",
+               left, numericAnswer=left, tolerance=1)]
+
+
+def soccer_big_win_score(event, ctx):
+    if event["sport"] != "soccer" or event["reason"] != "soccer_big_win":
+        return []
+    f = event["facts"]
+    return [_q(event, "numeric",
+               f"On {pretty_date(event['gameDate'])}, {f['winningTeam']} "
+               f"thrashed {f['losingTeam']} in the {f['competition']}. "
+               f"How many goals did {f['winningTeam']} score?",
+               f["winningScore"], numericAnswer=f["winningScore"], tolerance=1)]
+
+
+def soccer_goal_fest_total(event, ctx):
+    if event["sport"] != "soccer" or event["reason"] != "soccer_goal_fest":
+        return []
+    f = event["facts"]
+    total = f.get("combinedGoals")
+    if not total:
+        return []
+    return [_q(event, "numeric",
+               f"{f['homeTeam']} and {f['awayTeam']} produced a remarkable "
+               f"{f['competition']} match on {pretty_date(event['gameDate'])}. "
+               f"How many goals were scored in total?",
+               total, numericAnswer=total, tolerance=1)]
+
+
+TEMPLATES += [
+    nba_late_playoff_winner,
+    nba_blowout_margin,
+    nba_combined_points,
+    soccer_title_winner,
+    soccer_title_margin,
+    soccer_big_win_score,
+    soccer_goal_fest_total,
+]
