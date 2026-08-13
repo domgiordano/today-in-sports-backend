@@ -1,0 +1,675 @@
+{
+ "date": "1991-07-28",
+ "sourceUrl": "https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=1991-07-28&hydrate=linescore%2Cteam%2Cdecisions",
+ "games": [
+  {
+   "sport": "mlb",
+   "gameId": 202085,
+   "gameDate": "1991-07-28",
+   "queriedDate": "1991-07-28",
+   "gameType": "R",
+   "season": "1991",
+   "status": "Final",
+   "innings": 9,
+   "scheduledInnings": 9,
+   "seriesDescription": "Regular Season",
+   "away": {
+    "team": "Chicago White Sox",
+    "teamId": 145,
+    "league": "American League",
+    "leagueId": 103,
+    "runs": 5,
+    "hits": 9,
+    "errors": 1,
+    "isWinner": true
+   },
+   "home": {
+    "team": "Boston Red Sox",
+    "teamId": 111,
+    "league": "American League",
+    "leagueId": 103,
+    "runs": 2,
+    "hits": 7,
+    "errors": 1,
+    "isWinner": false
+   },
+   "decisions": {
+    "winner": {
+     "id": 114073,
+     "fullName": "Alex Fernandez",
+     "link": "/api/v1/people/114073"
+    },
+    "loser": {
+     "id": 115521,
+     "fullName": "Greg Harris",
+     "link": "/api/v1/people/115521"
+    },
+    "save": {
+     "id": 123230,
+     "fullName": "Bobby Thigpen",
+     "link": "/api/v1/people/123230"
+    }
+   },
+   "seriesGameNumber": 3,
+   "gamesInSeries": 3,
+   "sourceName": "mlb-stats-api",
+   "sourceDatasetRef": "https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=1991-07-28&hydrate=linescore%2Cteam%2Cdecisions#gamePk=202085"
+  },
+  {
+   "sport": "mlb",
+   "gameId": 202087,
+   "gameDate": "1991-07-28",
+   "queriedDate": "1991-07-28",
+   "gameType": "R",
+   "season": "1991",
+   "status": "Final",
+   "innings": 9,
+   "scheduledInnings": 9,
+   "seriesDescription": "Regular Season",
+   "away": {
+    "team": "Detroit Tigers",
+    "teamId": 116,
+    "league": "American League",
+    "leagueId": 103,
+    "runs": 6,
+    "hits": 9,
+    "errors": 1,
+    "isWinner": false
+   },
+   "home": {
+    "team": "Texas Rangers",
+    "teamId": 140,
+    "league": "American League",
+    "leagueId": 103,
+    "runs": 10,
+    "hits": 13,
+    "errors": 0,
+    "isWinner": true
+   },
+   "decisions": {
+    "winner": {
+     "id": 121597,
+     "fullName": "Nolan Ryan Jr.",
+     "link": "/api/v1/people/121597"
+    },
+    "loser": {
+     "id": 123084,
+     "fullName": "Frank Tanana",
+     "link": "/api/v1/people/123084"
+    }
+   },
+   "seriesGameNumber": 3,
+   "gamesInSeries": 3,
+   "sourceName": "mlb-stats-api",
+   "sourceDatasetRef": "https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=1991-07-28&hydrate=linescore%2Cteam%2Cdecisions#gamePk=202087"
+  },
+  {
+   "sport": "mlb",
+   "gameId": 202092,
+   "gameDate": "1991-07-28",
+   "queriedDate": "1991-07-28",
+   "gameType": "R",
+   "season": "1991",
+   "status": "Final",
+   "innings": 9,
+   "scheduledInnings": 9,
+   "seriesDescription": "Regular Season",
+   "away": {
+    "team": "Oakland Athletics",
+    "teamId": 133,
+    "league": "American League",
+    "leagueId": 103,
+    "runs": 4,
+    "hits": 8,
+    "errors": 0,
+    "isWinner": true
+   },
+   "home": {
+    "team": "Baltimore Orioles",
+    "teamId": 110,
+    "league": "American League",
+    "leagueId": 103,
+    "runs": 3,
+    "hits": 9,
+    "errors": 0,
+    "isWinner": false
+   },
+   "decisions": {
+    "winner": {
+     "id": 116118,
+     "fullName": "Rick Honeycutt",
+     "link": "/api/v1/people/116118"
+    },
+    "loser": {
+     "id": 118648,
+     "fullName": "Ben McDonald",
+     "link": "/api/v1/people/118648"
+    },
+    "save": {
+     "id": 113726,
+     "fullName": "Dennis Eckersley",
+     "link": "/api/v1/people/113726"
+    }
+   },
+   "seriesGameNumber": 3,
+   "gamesInSeries": 3,
+   "sourceName": "mlb-stats-api",
+   "sourceDatasetRef": "https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=1991-07-28&hydrate=linescore%2Cteam%2Cdecisions#gamePk=202092"
+  },
+  {
+   "sport": "mlb",
+   "gameId": 202095,
+   "gameDate": "1991-07-28",
+   "queriedDate": "1991-07-28",
+   "gameType": "R",
+   "season": "1991",
+   "status": "Final",
+   "innings": 9,
+   "scheduledInnings": 9,
+   "seriesDescription": "Regular Season",
+   "away": {
+    "team": "Seattle Mariners",
+    "teamId": 136,
+    "league": "American League",
+    "leagueId": 103,
+    "runs": 6,
+    "hits": 15,
+    "errors": 0,
+    "isWinner": true
+   },
+   "home": {
+    "team": "Cleveland Indians",
+    "teamId": 114,
+    "league": "American League",
+    "leagueId": 103,
+    "runs": 5,
+    "hits": 7,
+    "errors": 2,
+    "isWinner": false
+   },
+   "decisions": {
+    "winner": {
+     "id": 116615,
+     "fullName": "Randy Johnson",
+     "link": "/api/v1/people/116615"
+    },
+    "loser": {
+     "id": 124677,
+     "fullName": "Mike York",
+     "link": "/api/v1/people/124677"
+    },
+    "save": {
+     "id": 123053,
+     "fullName": "Bill Swift",
+     "link": "/api/v1/people/123053"
+    }
+   },
+   "seriesGameNumber": 3,
+   "gamesInSeries": 3,
+   "sourceName": "mlb-stats-api",
+   "sourceDatasetRef": "https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=1991-07-28&hydrate=linescore%2Cteam%2Cdecisions#gamePk=202095"
+  },
+  {
+   "sport": "mlb",
+   "gameId": 202088,
+   "gameDate": "1991-07-28",
+   "queriedDate": "1991-07-28",
+   "gameType": "R",
+   "season": "1991",
+   "status": "Final",
+   "innings": 9,
+   "scheduledInnings": 9,
+   "seriesDescription": "Regular Season",
+   "away": {
+    "team": "Kansas City Royals",
+    "teamId": 118,
+    "league": "American League",
+    "leagueId": 103,
+    "runs": 10,
+    "hits": 16,
+    "errors": 0,
+    "isWinner": true
+   },
+   "home": {
+    "team": "Toronto Blue Jays",
+    "teamId": 141,
+    "league": "American League",
+    "leagueId": 103,
+    "runs": 4,
+    "hits": 12,
+    "errors": 1,
+    "isWinner": false
+   },
+   "decisions": {
+    "winner": {
+     "id": 115217,
+     "fullName": "Mark Gubicza",
+     "link": "/api/v1/people/115217"
+    },
+    "loser": {
+     "id": 111954,
+     "fullName": "Tom Candiotti",
+     "link": "/api/v1/people/111954"
+    },
+    "save": {
+     "id": 113105,
+     "fullName": "Storm Davis",
+     "link": "/api/v1/people/113105"
+    }
+   },
+   "seriesGameNumber": 3,
+   "gamesInSeries": 3,
+   "sourceName": "mlb-stats-api",
+   "sourceDatasetRef": "https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=1991-07-28&hydrate=linescore%2Cteam%2Cdecisions#gamePk=202088"
+  },
+  {
+   "sport": "mlb",
+   "gameId": 202084,
+   "gameDate": "1991-07-28",
+   "queriedDate": "1991-07-28",
+   "gameType": "R",
+   "season": "1991",
+   "status": "Final",
+   "innings": 9,
+   "scheduledInnings": 9,
+   "seriesDescription": "Regular Season",
+   "away": {
+    "team": "California Angels",
+    "teamId": 108,
+    "league": "American League",
+    "leagueId": 103,
+    "runs": 8,
+    "hits": 12,
+    "errors": 1,
+    "isWinner": true
+   },
+   "home": {
+    "team": "New York Yankees",
+    "teamId": 147,
+    "league": "American League",
+    "leagueId": 103,
+    "runs": 4,
+    "hits": 8,
+    "errors": 0,
+    "isWinner": false
+   },
+   "decisions": {
+    "winner": {
+     "id": 110009,
+     "fullName": "Jim Abbott",
+     "link": "/api/v1/people/110009"
+    },
+    "loser": {
+     "id": 116824,
+     "fullName": "Scott Kamieniecki",
+     "link": "/api/v1/people/116824"
+    }
+   },
+   "seriesGameNumber": 3,
+   "gamesInSeries": 3,
+   "sourceName": "mlb-stats-api",
+   "sourceDatasetRef": "https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=1991-07-28&hydrate=linescore%2Cteam%2Cdecisions#gamePk=202084"
+  },
+  {
+   "sport": "mlb",
+   "gameId": 202094,
+   "gameDate": "1991-07-28",
+   "queriedDate": "1991-07-28",
+   "gameType": "R",
+   "season": "1991",
+   "status": "Final",
+   "innings": 9,
+   "scheduledInnings": 9,
+   "seriesDescription": "Regular Season",
+   "away": {
+    "team": "Pittsburgh Pirates",
+    "teamId": 134,
+    "league": "National League",
+    "leagueId": 104,
+    "runs": 7,
+    "hits": 9,
+    "errors": 1,
+    "isWinner": false
+   },
+   "home": {
+    "team": "Houston Astros",
+    "teamId": 117,
+    "league": "National League",
+    "leagueId": 104,
+    "runs": 9,
+    "hits": 12,
+    "errors": 3,
+    "isWinner": true
+   },
+   "decisions": {
+    "winner": {
+     "id": 111285,
+     "fullName": "Ryan Bowen",
+     "link": "/api/v1/people/111285"
+    },
+    "loser": {
+     "id": 122473,
+     "fullName": "Zane Smith",
+     "link": "/api/v1/people/122473"
+    },
+    "save": {
+     "id": 112306,
+     "fullName": "Jim Clancy",
+     "link": "/api/v1/people/112306"
+    }
+   },
+   "seriesGameNumber": 3,
+   "gamesInSeries": 3,
+   "sourceName": "mlb-stats-api",
+   "sourceDatasetRef": "https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=1991-07-28&hydrate=linescore%2Cteam%2Cdecisions#gamePk=202094"
+  },
+  {
+   "sport": "mlb",
+   "gameId": 202086,
+   "gameDate": "1991-07-28",
+   "queriedDate": "1991-07-28",
+   "gameType": "R",
+   "season": "1991",
+   "status": "Final",
+   "innings": 9,
+   "scheduledInnings": 9,
+   "seriesDescription": "Regular Season",
+   "away": {
+    "team": "Cincinnati Reds",
+    "teamId": 113,
+    "league": "National League",
+    "leagueId": 104,
+    "runs": 2,
+    "hits": 13,
+    "errors": 0,
+    "isWinner": false
+   },
+   "home": {
+    "team": "St. Louis Cardinals",
+    "teamId": 138,
+    "league": "National League",
+    "leagueId": 104,
+    "runs": 3,
+    "hits": 4,
+    "errors": 0,
+    "isWinner": true
+   },
+   "decisions": {
+    "winner": {
+     "id": 113229,
+     "fullName": "Jose DeLeon",
+     "link": "/api/v1/people/113229"
+    },
+    "loser": {
+     "id": 119626,
+     "fullName": "Randy Myers",
+     "link": "/api/v1/people/119626"
+    },
+    "save": {
+     "id": 122426,
+     "fullName": "Lee Smith",
+     "link": "/api/v1/people/122426"
+    }
+   },
+   "seriesGameNumber": 3,
+   "gamesInSeries": 3,
+   "sourceName": "mlb-stats-api",
+   "sourceDatasetRef": "https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=1991-07-28&hydrate=linescore%2Cteam%2Cdecisions#gamePk=202086"
+  },
+  {
+   "sport": "mlb",
+   "gameId": 202083,
+   "gameDate": "1991-07-28",
+   "queriedDate": "1991-07-28",
+   "gameType": "R",
+   "season": "1991",
+   "status": "Final",
+   "innings": 9,
+   "scheduledInnings": 9,
+   "seriesDescription": "Regular Season",
+   "away": {
+    "team": "Atlanta Braves",
+    "teamId": 144,
+    "league": "National League",
+    "leagueId": 104,
+    "runs": 2,
+    "hits": 9,
+    "errors": 1,
+    "isWinner": false
+   },
+   "home": {
+    "team": "Chicago Cubs",
+    "teamId": 112,
+    "league": "National League",
+    "leagueId": 104,
+    "runs": 6,
+    "hits": 11,
+    "errors": 0,
+    "isWinner": true
+   },
+   "decisions": {
+    "winner": {
+     "id": 110979,
+     "fullName": "Mike Bielecki",
+     "link": "/api/v1/people/110979"
+    },
+    "loser": {
+     "id": 117643,
+     "fullName": "Charlie Leibrandt",
+     "link": "/api/v1/people/117643"
+    },
+    "save": {
+     "id": 110358,
+     "fullName": "Paul Assenmacher",
+     "link": "/api/v1/people/110358"
+    }
+   },
+   "seriesGameNumber": 3,
+   "gamesInSeries": 3,
+   "sourceName": "mlb-stats-api",
+   "sourceDatasetRef": "https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=1991-07-28&hydrate=linescore%2Cteam%2Cdecisions#gamePk=202083"
+  },
+  {
+   "sport": "mlb",
+   "gameId": 202089,
+   "gameDate": "1991-07-28",
+   "queriedDate": "1991-07-28",
+   "gameType": "R",
+   "season": "1991",
+   "status": "Final",
+   "innings": 9,
+   "scheduledInnings": 9,
+   "seriesDescription": "Regular Season",
+   "away": {
+    "team": "Milwaukee Brewers",
+    "teamId": 158,
+    "league": "American League",
+    "leagueId": 103,
+    "runs": 11,
+    "hits": 22,
+    "errors": 1,
+    "isWinner": true
+   },
+   "home": {
+    "team": "Minnesota Twins",
+    "teamId": 142,
+    "league": "American League",
+    "leagueId": 103,
+    "runs": 2,
+    "hits": 10,
+    "errors": 0,
+    "isWinner": false
+   },
+   "decisions": {
+    "winner": {
+     "id": 119667,
+     "fullName": "Jaime Navarro",
+     "link": "/api/v1/people/119667"
+    },
+    "loser": {
+     "id": 119399,
+     "fullName": "Jack Morris",
+     "link": "/api/v1/people/119399"
+    }
+   },
+   "seriesGameNumber": 3,
+   "gamesInSeries": 3,
+   "sourceName": "mlb-stats-api",
+   "sourceDatasetRef": "https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=1991-07-28&hydrate=linescore%2Cteam%2Cdecisions#gamePk=202089"
+  },
+  {
+   "sport": "mlb",
+   "gameId": 202090,
+   "gameDate": "1991-07-28",
+   "queriedDate": "1991-07-28",
+   "gameType": "R",
+   "season": "1991",
+   "status": "Final",
+   "innings": 9,
+   "scheduledInnings": 9,
+   "seriesDescription": "Regular Season",
+   "away": {
+    "team": "Montreal Expos",
+    "teamId": 120,
+    "league": "National League",
+    "leagueId": 104,
+    "runs": 2,
+    "hits": 4,
+    "errors": 0,
+    "isWinner": true
+   },
+   "home": {
+    "team": "Los Angeles Dodgers",
+    "teamId": 119,
+    "league": "National League",
+    "leagueId": 104,
+    "runs": 0,
+    "hits": 0,
+    "errors": 2,
+    "isWinner": false
+   },
+   "decisions": {
+    "winner": {
+     "id": 118371,
+     "fullName": "Dennis Martinez",
+     "link": "/api/v1/people/118371"
+    },
+    "loser": {
+     "id": 119374,
+     "fullName": "Mike Morgan",
+     "link": "/api/v1/people/119374"
+    }
+   },
+   "seriesGameNumber": 3,
+   "gamesInSeries": 3,
+   "sourceName": "mlb-stats-api",
+   "sourceDatasetRef": "https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=1991-07-28&hydrate=linescore%2Cteam%2Cdecisions#gamePk=202090"
+  },
+  {
+   "sport": "mlb",
+   "gameId": 202091,
+   "gameDate": "1991-07-28",
+   "queriedDate": "1991-07-28",
+   "gameType": "R",
+   "season": "1991",
+   "status": "Final",
+   "innings": 9,
+   "scheduledInnings": 9,
+   "seriesDescription": "Regular Season",
+   "away": {
+    "team": "New York Mets",
+    "teamId": 121,
+    "league": "National League",
+    "leagueId": 104,
+    "runs": 0,
+    "hits": 5,
+    "errors": 1,
+    "isWinner": false
+   },
+   "home": {
+    "team": "San Diego Padres",
+    "teamId": 135,
+    "league": "National League",
+    "leagueId": 104,
+    "runs": 2,
+    "hits": 5,
+    "errors": 1,
+    "isWinner": true
+   },
+   "decisions": {
+    "winner": {
+     "id": 110854,
+     "fullName": "Andy Benes",
+     "link": "/api/v1/people/110854"
+    },
+    "loser": {
+     "id": 123732,
+     "fullName": "Frank Viola",
+     "link": "/api/v1/people/123732"
+    },
+    "save": {
+     "id": 117628,
+     "fullName": "Craig Lefferts",
+     "link": "/api/v1/people/117628"
+    }
+   },
+   "seriesGameNumber": 3,
+   "gamesInSeries": 3,
+   "sourceName": "mlb-stats-api",
+   "sourceDatasetRef": "https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=1991-07-28&hydrate=linescore%2Cteam%2Cdecisions#gamePk=202091"
+  },
+  {
+   "sport": "mlb",
+   "gameId": 202093,
+   "gameDate": "1991-07-28",
+   "queriedDate": "1991-07-28",
+   "gameType": "R",
+   "season": "1991",
+   "status": "Final",
+   "innings": 9,
+   "scheduledInnings": 9,
+   "seriesDescription": "Regular Season",
+   "away": {
+    "team": "Philadelphia Phillies",
+    "teamId": 143,
+    "league": "National League",
+    "leagueId": 104,
+    "runs": 1,
+    "hits": 6,
+    "errors": 1,
+    "isWinner": false
+   },
+   "home": {
+    "team": "San Francisco Giants",
+    "teamId": 137,
+    "league": "National League",
+    "leagueId": 104,
+    "runs": 2,
+    "hits": 7,
+    "errors": 0,
+    "isWinner": true
+   },
+   "decisions": {
+    "winner": {
+     "id": 111034,
+     "fullName": "Bud Black",
+     "link": "/api/v1/people/111034"
+    },
+    "loser": {
+     "id": 115099,
+     "fullName": "Tommy Greene",
+     "link": "/api/v1/people/115099"
+    },
+    "save": {
+     "id": 111397,
+     "fullName": "Jeff Brantley",
+     "link": "/api/v1/people/111397"
+    }
+   },
+   "seriesGameNumber": 3,
+   "gamesInSeries": 3,
+   "sourceName": "mlb-stats-api",
+   "sourceDatasetRef": "https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=1991-07-28&hydrate=linescore%2Cteam%2Cdecisions#gamePk=202093"
+  }
+ ]
+}

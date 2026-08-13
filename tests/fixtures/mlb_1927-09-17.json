@@ -1,0 +1,720 @@
+{
+ "date": "1927-09-17",
+ "sourceUrl": "https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=1927-09-17&hydrate=linescore%2Cteam%2Cdecisions",
+ "games": [
+  {
+   "sport": "mlb",
+   "gameId": 102994,
+   "gameDate": "1927-09-17",
+   "queriedDate": "1927-09-17",
+   "gameType": "R",
+   "season": "1927",
+   "status": "Final",
+   "innings": 9,
+   "scheduledInnings": 9,
+   "seriesDescription": "Regular Season",
+   "away": {
+    "team": "Detroit Tigers",
+    "teamId": 116,
+    "league": "American League",
+    "leagueId": 103,
+    "runs": 8,
+    "hits": 12,
+    "errors": 1,
+    "isWinner": true
+   },
+   "home": {
+    "team": "Boston Red Sox",
+    "teamId": 111,
+    "league": "American League",
+    "leagueId": 103,
+    "runs": 4,
+    "hits": 9,
+    "errors": 4,
+    "isWinner": false
+   },
+   "decisions": {
+    "winner": {
+     "id": 110998,
+     "fullName": "Josh Billings",
+     "link": "/api/v1/people/110998"
+    },
+    "loser": {
+     "id": 118074,
+     "fullName": "Danny MacFayden",
+     "link": "/api/v1/people/118074"
+    },
+    "save": {
+     "id": 116090,
+     "fullName": "Ken Holloway",
+     "link": "/api/v1/people/116090"
+    }
+   },
+   "seriesGameNumber": 2,
+   "gamesInSeries": 5,
+   "sourceName": "mlb-stats-api",
+   "sourceDatasetRef": "https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=1927-09-17&hydrate=linescore%2Cteam%2Cdecisions#gamePk=102994"
+  },
+  {
+   "sport": "mlb",
+   "gameId": 102995,
+   "gameDate": "1927-09-17",
+   "queriedDate": "1927-09-17",
+   "gameType": "R",
+   "season": "1927",
+   "status": "Final",
+   "innings": 9,
+   "scheduledInnings": 9,
+   "seriesDescription": "Regular Season",
+   "away": {
+    "team": "Detroit Tigers",
+    "teamId": 116,
+    "league": "American League",
+    "leagueId": 103,
+    "runs": 11,
+    "hits": 19,
+    "errors": 1,
+    "isWinner": true
+   },
+   "home": {
+    "team": "Boston Red Sox",
+    "teamId": 111,
+    "league": "American League",
+    "leagueId": 103,
+    "runs": 5,
+    "hits": 11,
+    "errors": 2,
+    "isWinner": false
+   },
+   "decisions": {
+    "winner": {
+     "id": 112047,
+     "fullName": "Ownie Carroll",
+     "link": "/api/v1/people/112047"
+    },
+    "loser": {
+     "id": 124437,
+     "fullName": "Hal Wiltse",
+     "link": "/api/v1/people/124437"
+    }
+   },
+   "seriesGameNumber": 3,
+   "gamesInSeries": 5,
+   "sourceName": "mlb-stats-api",
+   "sourceDatasetRef": "https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=1927-09-17&hydrate=linescore%2Cteam%2Cdecisions#gamePk=102995"
+  },
+  {
+   "sport": "mlb",
+   "gameId": 102999,
+   "gameDate": "1927-09-17",
+   "queriedDate": "1927-09-17",
+   "gameType": "R",
+   "season": "1927",
+   "status": "Final",
+   "innings": 9,
+   "scheduledInnings": 9,
+   "seriesDescription": "Regular Season",
+   "away": {
+    "team": "St. Louis Browns",
+    "teamId": 110,
+    "league": "American League",
+    "leagueId": 103,
+    "runs": 6,
+    "hits": 9,
+    "errors": 1,
+    "isWinner": true
+   },
+   "home": {
+    "team": "Philadelphia Athletics",
+    "teamId": 133,
+    "league": "American League",
+    "leagueId": 103,
+    "runs": 0,
+    "hits": 7,
+    "errors": 1,
+    "isWinner": false
+   },
+   "decisions": {
+    "winner": {
+     "id": 123644,
+     "fullName": "Elam Vangilder",
+     "link": "/api/v1/people/123644"
+    },
+    "loser": {
+     "id": 123804,
+     "fullName": "Rube Walberg",
+     "link": "/api/v1/people/123804"
+    }
+   },
+   "seriesGameNumber": 2,
+   "gamesInSeries": 5,
+   "sourceName": "mlb-stats-api",
+   "sourceDatasetRef": "https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=1927-09-17&hydrate=linescore%2Cteam%2Cdecisions#gamePk=102999"
+  },
+  {
+   "sport": "mlb",
+   "gameId": 103000,
+   "gameDate": "1927-09-17",
+   "queriedDate": "1927-09-17",
+   "gameType": "R",
+   "season": "1927",
+   "status": "Final",
+   "innings": 9,
+   "scheduledInnings": 9,
+   "seriesDescription": "Regular Season",
+   "away": {
+    "team": "St. Louis Browns",
+    "teamId": 110,
+    "league": "American League",
+    "leagueId": 103,
+    "runs": 0,
+    "hits": 4,
+    "errors": 2,
+    "isWinner": false
+   },
+   "home": {
+    "team": "Philadelphia Athletics",
+    "teamId": 133,
+    "league": "American League",
+    "leagueId": 103,
+    "runs": 13,
+    "hits": 15,
+    "errors": 0,
+    "isWinner": true
+   },
+   "decisions": {
+    "winner": {
+     "id": 121426,
+     "fullName": "Eddie Rommel",
+     "link": "/api/v1/people/121426"
+    },
+    "loser": {
+     "id": 116726,
+     "fullName": "Sad Sam Jones",
+     "link": "/api/v1/people/116726"
+    }
+   },
+   "seriesGameNumber": 3,
+   "gamesInSeries": 5,
+   "sourceName": "mlb-stats-api",
+   "sourceDatasetRef": "https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=1927-09-17&hydrate=linescore%2Cteam%2Cdecisions#gamePk=103000"
+  },
+  {
+   "sport": "mlb",
+   "gameId": 102987,
+   "gameDate": "1927-09-17",
+   "queriedDate": "1927-09-17",
+   "gameType": "R",
+   "season": "1927",
+   "status": "Final",
+   "innings": 9,
+   "scheduledInnings": 9,
+   "seriesDescription": "Regular Season",
+   "away": {
+    "team": "Brooklyn Robins",
+    "teamId": 119,
+    "league": "National League",
+    "leagueId": 104,
+    "runs": 1,
+    "hits": 10,
+    "errors": 0,
+    "isWinner": false
+   },
+   "home": {
+    "team": "Pittsburgh Pirates",
+    "teamId": 134,
+    "league": "National League",
+    "leagueId": 104,
+    "runs": 2,
+    "hits": 10,
+    "errors": 0,
+    "isWinner": true
+   },
+   "decisions": {
+    "winner": {
+     "id": 110121,
+     "fullName": "Vic Aldridge",
+     "link": "/api/v1/people/110121"
+    },
+    "loser": {
+     "id": 120487,
+     "fullName": "Jesse Petty",
+     "link": "/api/v1/people/120487"
+    }
+   },
+   "seriesGameNumber": 1,
+   "gamesInSeries": 5,
+   "sourceName": "mlb-stats-api",
+   "sourceDatasetRef": "https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=1927-09-17&hydrate=linescore%2Cteam%2Cdecisions#gamePk=102987"
+  },
+  {
+   "sport": "mlb",
+   "gameId": 102988,
+   "gameDate": "1927-09-17",
+   "queriedDate": "1927-09-17",
+   "gameType": "R",
+   "season": "1927",
+   "status": "Final",
+   "innings": 9,
+   "scheduledInnings": 9,
+   "seriesDescription": "Regular Season",
+   "away": {
+    "team": "Brooklyn Robins",
+    "teamId": 119,
+    "league": "National League",
+    "leagueId": 104,
+    "runs": 0,
+    "hits": 3,
+    "errors": 0,
+    "isWinner": false
+   },
+   "home": {
+    "team": "Pittsburgh Pirates",
+    "teamId": 134,
+    "league": "National League",
+    "leagueId": 104,
+    "runs": 6,
+    "hits": 13,
+    "errors": 0,
+    "isWinner": true
+   },
+   "decisions": {
+    "winner": {
+     "id": 117308,
+     "fullName": "Ray Kremer",
+     "link": "/api/v1/people/117308"
+    },
+    "loser": {
+     "id": 113811,
+     "fullName": "Jumbo Elliott",
+     "link": "/api/v1/people/113811"
+    }
+   },
+   "seriesGameNumber": 2,
+   "gamesInSeries": 5,
+   "sourceName": "mlb-stats-api",
+   "sourceDatasetRef": "https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=1927-09-17&hydrate=linescore%2Cteam%2Cdecisions#gamePk=102988"
+  },
+  {
+   "sport": "mlb",
+   "gameId": 102996,
+   "gameDate": "1927-09-17",
+   "queriedDate": "1927-09-17",
+   "gameType": "R",
+   "season": "1927",
+   "status": "Final",
+   "innings": 9,
+   "scheduledInnings": 9,
+   "seriesDescription": "Regular Season",
+   "away": {
+    "team": "New York Giants",
+    "teamId": 137,
+    "league": "National League",
+    "leagueId": 104,
+    "runs": 5,
+    "hits": 8,
+    "errors": 1,
+    "isWinner": true
+   },
+   "home": {
+    "team": "Cincinnati Reds",
+    "teamId": 113,
+    "league": "National League",
+    "leagueId": 104,
+    "runs": 1,
+    "hits": 6,
+    "errors": 1,
+    "isWinner": false
+   },
+   "decisions": {
+    "winner": {
+     "id": 114203,
+     "fullName": "Freddie Fitzsimmons",
+     "link": "/api/v1/people/114203"
+    },
+    "loser": {
+     "id": 118012,
+     "fullName": "Dolf Luque",
+     "link": "/api/v1/people/118012"
+    }
+   },
+   "seriesGameNumber": 1,
+   "gamesInSeries": 5,
+   "sourceName": "mlb-stats-api",
+   "sourceDatasetRef": "https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=1927-09-17&hydrate=linescore%2Cteam%2Cdecisions#gamePk=102996"
+  },
+  {
+   "sport": "mlb",
+   "gameId": 102997,
+   "gameDate": "1927-09-17",
+   "queriedDate": "1927-09-17",
+   "gameType": "R",
+   "season": "1927",
+   "status": "Final",
+   "innings": 9,
+   "scheduledInnings": 9,
+   "seriesDescription": "Regular Season",
+   "away": {
+    "team": "New York Giants",
+    "teamId": 137,
+    "league": "National League",
+    "leagueId": 104,
+    "runs": 8,
+    "hits": 10,
+    "errors": 0,
+    "isWinner": true
+   },
+   "home": {
+    "team": "Cincinnati Reds",
+    "teamId": 113,
+    "league": "National League",
+    "leagueId": 104,
+    "runs": 7,
+    "hits": 15,
+    "errors": 3,
+    "isWinner": false
+   },
+   "decisions": {
+    "winner": {
+     "id": 110883,
+     "fullName": "Larry Benton",
+     "link": "/api/v1/people/110883"
+    },
+    "loser": {
+     "id": 113455,
+     "fullName": "Pete Donohue",
+     "link": "/api/v1/people/113455"
+    }
+   },
+   "seriesGameNumber": 2,
+   "gamesInSeries": 5,
+   "sourceName": "mlb-stats-api",
+   "sourceDatasetRef": "https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=1927-09-17&hydrate=linescore%2Cteam%2Cdecisions#gamePk=102997"
+  },
+  {
+   "sport": "mlb",
+   "gameId": 102991,
+   "gameDate": "1927-09-17",
+   "queriedDate": "1927-09-17",
+   "gameType": "R",
+   "season": "1927",
+   "status": "Final",
+   "innings": 9,
+   "scheduledInnings": 9,
+   "seriesDescription": "Regular Season",
+   "away": {
+    "team": "Chicago White Sox",
+    "teamId": 145,
+    "league": "American League",
+    "leagueId": 103,
+    "runs": 2,
+    "hits": 6,
+    "errors": 1,
+    "isWinner": false
+   },
+   "home": {
+    "team": "New York Yankees",
+    "teamId": 147,
+    "league": "American League",
+    "leagueId": 103,
+    "runs": 3,
+    "hits": 8,
+    "errors": 1,
+    "isWinner": true
+   },
+   "decisions": {
+    "winner": {
+     "id": 122176,
+     "fullName": "Urban Shocker",
+     "link": "/api/v1/people/122176"
+    },
+    "loser": {
+     "id": 113965,
+     "fullName": "Red Faber",
+     "link": "/api/v1/people/113965"
+    }
+   },
+   "seriesGameNumber": 2,
+   "gamesInSeries": 5,
+   "sourceName": "mlb-stats-api",
+   "sourceDatasetRef": "https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=1927-09-17&hydrate=linescore%2Cteam%2Cdecisions#gamePk=102991"
+  },
+  {
+   "sport": "mlb",
+   "gameId": 102992,
+   "gameDate": "1927-09-17",
+   "queriedDate": "1927-09-17",
+   "gameType": "R",
+   "season": "1927",
+   "status": "Final",
+   "innings": 9,
+   "scheduledInnings": 9,
+   "seriesDescription": "Regular Season",
+   "away": {
+    "team": "Chicago White Sox",
+    "teamId": 145,
+    "league": "American League",
+    "leagueId": 103,
+    "runs": 1,
+    "hits": 9,
+    "errors": 0,
+    "isWinner": false
+   },
+   "home": {
+    "team": "New York Yankees",
+    "teamId": 147,
+    "league": "American League",
+    "leagueId": 103,
+    "runs": 8,
+    "hits": 15,
+    "errors": 1,
+    "isWinner": true
+   },
+   "decisions": {
+    "winner": {
+     "id": 120386,
+     "fullName": "Herb Pennock",
+     "link": "/api/v1/people/120386"
+    },
+    "loser": {
+     "id": 112569,
+     "fullName": "Sarge Connally",
+     "link": "/api/v1/people/112569"
+    }
+   },
+   "seriesGameNumber": 3,
+   "gamesInSeries": 5,
+   "sourceName": "mlb-stats-api",
+   "sourceDatasetRef": "https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=1927-09-17&hydrate=linescore%2Cteam%2Cdecisions#gamePk=102992"
+  },
+  {
+   "sport": "mlb",
+   "gameId": 102989,
+   "gameDate": "1927-09-17",
+   "queriedDate": "1927-09-17",
+   "gameType": "R",
+   "season": "1927",
+   "status": "Final",
+   "innings": 13,
+   "scheduledInnings": 9,
+   "seriesDescription": "Regular Season",
+   "away": {
+    "team": "Boston Braves",
+    "teamId": 144,
+    "league": "National League",
+    "leagueId": 104,
+    "runs": 2,
+    "hits": 10,
+    "errors": 3,
+    "isWinner": false
+   },
+   "home": {
+    "team": "Chicago Cubs",
+    "teamId": 112,
+    "league": "National League",
+    "leagueId": 104,
+    "runs": 3,
+    "hits": 15,
+    "errors": 1,
+    "isWinner": true
+   },
+   "decisions": {
+    "winner": {
+     "id": 111791,
+     "fullName": "Guy Bush",
+     "link": "/api/v1/people/111791"
+    },
+    "loser": {
+     "id": 114693,
+     "fullName": "Joe Genewich",
+     "link": "/api/v1/people/114693"
+    }
+   },
+   "seriesGameNumber": 1,
+   "gamesInSeries": 5,
+   "sourceName": "mlb-stats-api",
+   "sourceDatasetRef": "https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=1927-09-17&hydrate=linescore%2Cteam%2Cdecisions#gamePk=102989"
+  },
+  {
+   "sport": "mlb",
+   "gameId": 102990,
+   "gameDate": "1927-09-17",
+   "queriedDate": "1927-09-17",
+   "gameType": "R",
+   "season": "1927",
+   "status": "Final",
+   "innings": 9,
+   "scheduledInnings": 9,
+   "seriesDescription": "Regular Season",
+   "away": {
+    "team": "Boston Braves",
+    "teamId": 144,
+    "league": "National League",
+    "leagueId": 104,
+    "runs": 3,
+    "hits": 9,
+    "errors": 3,
+    "isWinner": false
+   },
+   "home": {
+    "team": "Chicago Cubs",
+    "teamId": 112,
+    "league": "National League",
+    "leagueId": 104,
+    "runs": 5,
+    "hits": 11,
+    "errors": 2,
+    "isWinner": true
+   },
+   "decisions": {
+    "winner": {
+     "id": 112005,
+     "fullName": "Hal Carlson",
+     "link": "/api/v1/people/112005"
+    },
+    "loser": {
+     "id": 114899,
+     "fullName": "Hal Goldsmith",
+     "link": "/api/v1/people/114899"
+    }
+   },
+   "seriesGameNumber": 2,
+   "gamesInSeries": 5,
+   "sourceName": "mlb-stats-api",
+   "sourceDatasetRef": "https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=1927-09-17&hydrate=linescore%2Cteam%2Cdecisions#gamePk=102990"
+  },
+  {
+   "sport": "mlb",
+   "gameId": 857134,
+   "gameDate": "1926-06-03",
+   "queriedDate": "1927-09-17",
+   "gameType": "C",
+   "season": "1926",
+   "status": "Final",
+   "innings": 9,
+   "scheduledInnings": 9,
+   "seriesDescription": "Championship",
+   "away": {
+    "team": "Detroit Stars",
+    "teamId": 1508,
+    "league": "Negro National League (I)",
+    "leagueId": 430,
+    "runs": 3,
+    "hits": null,
+    "errors": null,
+    "isWinner": false
+   },
+   "home": {
+    "team": "St. Louis Stars",
+    "teamId": 1541,
+    "league": "Negro National League (I)",
+    "leagueId": 430,
+    "runs": 4,
+    "hits": null,
+    "errors": null,
+    "isWinner": true
+   },
+   "decisions": {},
+   "seriesGameNumber": null,
+   "gamesInSeries": null,
+   "sourceName": "mlb-stats-api",
+   "sourceDatasetRef": "https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=1927-09-17&hydrate=linescore%2Cteam%2Cdecisions#gamePk=857134"
+  },
+  {
+   "sport": "mlb",
+   "gameId": 102993,
+   "gameDate": "1927-09-17",
+   "queriedDate": "1927-09-17",
+   "gameType": "R",
+   "season": "1927",
+   "status": "Final",
+   "innings": 9,
+   "scheduledInnings": 9,
+   "seriesDescription": "Regular Season",
+   "away": {
+    "team": "Cleveland Indians",
+    "teamId": 114,
+    "league": "American League",
+    "leagueId": 103,
+    "runs": 0,
+    "hits": 8,
+    "errors": 1,
+    "isWinner": false
+   },
+   "home": {
+    "team": "Washington Senators",
+    "teamId": 142,
+    "league": "American League",
+    "leagueId": 103,
+    "runs": 3,
+    "hits": 5,
+    "errors": 1,
+    "isWinner": true
+   },
+   "decisions": {
+    "winner": {
+     "id": 117812,
+     "fullName": "Horace Lisenbee",
+     "link": "/api/v1/people/117812"
+    },
+    "loser": {
+     "id": 116259,
+     "fullName": "Willis Hudlin",
+     "link": "/api/v1/people/116259"
+    }
+   },
+   "seriesGameNumber": 1,
+   "gamesInSeries": 3,
+   "sourceName": "mlb-stats-api",
+   "sourceDatasetRef": "https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=1927-09-17&hydrate=linescore%2Cteam%2Cdecisions#gamePk=102993"
+  },
+  {
+   "sport": "mlb",
+   "gameId": 102998,
+   "gameDate": "1927-09-17",
+   "queriedDate": "1927-09-17",
+   "gameType": "R",
+   "season": "1927",
+   "status": "Final",
+   "innings": 9,
+   "scheduledInnings": 9,
+   "seriesDescription": "Regular Season",
+   "away": {
+    "team": "Philadelphia Phillies",
+    "teamId": 143,
+    "league": "National League",
+    "leagueId": 104,
+    "runs": 0,
+    "hits": 7,
+    "errors": 1,
+    "isWinner": false
+   },
+   "home": {
+    "team": "St. Louis Cardinals",
+    "teamId": 138,
+    "league": "National League",
+    "leagueId": 104,
+    "runs": 11,
+    "hits": 18,
+    "errors": 0,
+    "isWinner": true
+   },
+   "decisions": {
+    "winner": {
+     "id": 121043,
+     "fullName": "Art Reinhart",
+     "link": "/api/v1/people/121043"
+    },
+    "loser": {
+     "id": 120784,
+     "fullName": "Hub Pruett",
+     "link": "/api/v1/people/120784"
+    }
+   },
+   "seriesGameNumber": 1,
+   "gamesInSeries": 5,
+   "sourceName": "mlb-stats-api",
+   "sourceDatasetRef": "https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=1927-09-17&hydrate=linescore%2Cteam%2Cdecisions#gamePk=102998"
+  }
+ ]
+}

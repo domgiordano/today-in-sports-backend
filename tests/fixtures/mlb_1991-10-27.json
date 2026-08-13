@@ -1,0 +1,54 @@
+{
+ "date": "1991-10-27",
+ "sourceUrl": "https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=1991-10-27&hydrate=linescore%2Cteam%2Cdecisions",
+ "games": [
+  {
+   "sport": "mlb",
+   "gameId": 67961,
+   "gameDate": "1991-10-27",
+   "queriedDate": "1991-10-27",
+   "gameType": "W",
+   "season": "1991",
+   "status": "Final",
+   "innings": 10,
+   "scheduledInnings": 9,
+   "seriesDescription": "World Series",
+   "away": {
+    "team": "Atlanta Braves",
+    "teamId": 144,
+    "league": "National League",
+    "leagueId": 104,
+    "runs": 0,
+    "hits": 7,
+    "errors": 0,
+    "isWinner": false
+   },
+   "home": {
+    "team": "Minnesota Twins",
+    "teamId": 142,
+    "league": "American League",
+    "leagueId": 103,
+    "runs": 1,
+    "hits": 10,
+    "errors": 0,
+    "isWinner": true
+   },
+   "decisions": {
+    "winner": {
+     "id": 119399,
+     "fullName": "Jack Morris",
+     "link": "/api/v1/people/119399"
+    },
+    "loser": {
+     "id": 120369,
+     "fullName": "Alejandro Pena",
+     "link": "/api/v1/people/120369"
+    }
+   },
+   "seriesGameNumber": 7,
+   "gamesInSeries": 7,
+   "sourceName": "mlb-stats-api",
+   "sourceDatasetRef": "https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=1991-10-27&hydrate=linescore%2Cteam%2Cdecisions#gamePk=67961"
+  }
+ ]
+}
