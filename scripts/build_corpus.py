@@ -30,7 +30,9 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from lambdas.common.notability import mlb as mlb_nb          # noqa: E402
 from lambdas.common.notability import milestones as ms       # noqa: E402
+from lambdas.common.notability import transactions as tran_nb  # noqa: E402
 from lambdas.common.sources import retrosheet as rs          # noqa: E402
+from lambdas.common.sources import retrosheet_transactions as rst  # noqa: E402
 
 CACHE = os.environ.get("RETROSHEET_CACHE", os.path.expanduser("~/.cache/retrosheet"))
 
@@ -129,6 +131,26 @@ class MilestoneAccumulator:
             },
             "sourceName": game["sourceName"],
             "sourceDatasetRef": game["sourceDatasetRef"],
+        }
+
+    def career_index(self):
+        """
+        Player id to name, career starts and role, for the transaction detector.
+
+        This is the same counting the debut and finale events already rely on,
+        exposed rather than recomputed. A player who never reached the majors
+        has no entry here, which is what stops the thousands of amateur-draft
+        rows in the transaction file producing questions about people who never
+        played a game.
+        """
+        return {
+            pid: {
+                "name": self.names[pid],
+                "starts": count,
+                "isPitcher": self.roles[pid] == {"pitcher"},
+            }
+            for pid, count in self.appearances.items()
+            if self.names.get(pid)
         }
 
     def finish(self):
@@ -235,10 +257,20 @@ def main():
         for e in milestones:
             out.write(json.dumps(e, default=str) + "\n")
 
+        # Transactions come last because they need the finished career index:
+        # whether a 1919 sale was notable depends on a career that ran to 1935.
+        deals = rst.load(CACHE)
+        team_names = rs.load_team_names(CACHE)
+        tran_events = tran_nb.detect(
+            deals, acc.career_index(), team_names, rs.team_name)
+        for e in tran_events:
+            out.write(json.dumps(e, default=str) + "\n")
+
     print(f"\nseasons   : {seasons_done}")
     print(f"games     : {total_games}")
-    print(f"events    : {total_events + len(milestones)} "
-          f"({total_events} game-level, {len(milestones)} milestone)")
+    print(f"events    : {total_events + len(milestones) + len(tran_events)} "
+          f"({total_events} game-level, {len(milestones)} milestone, "
+          f"{len(tran_events)} transaction)")
     print(f"corpus    : {acc.first_season}-{acc.last_season}")
     print(f"wrote     : {args.out} ({os.path.getsize(args.out) / 1e6:.1f} MB)")
 

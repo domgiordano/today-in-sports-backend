@@ -25,6 +25,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from lambdas.common import constants                              # noqa: E402
 from lambdas.common.templates import mlb_templates as mlb_tpl     # noqa: E402
+from lambdas.common.templates import transaction_templates as tran_tpl  # noqa: E402
 from lambdas.common.templates import winter_templates as win_tpl  # noqa: E402
 
 
@@ -47,7 +48,14 @@ def build_questions(events):
     `playoff_overtime` — so the template sets are kept apart and each gets only
     its own events.
     """
-    mlb_events = [e for e in events if e["sport"] == "mlb"]
+    # Transactions are MLB but are not games, so they are split out first —
+    # the game-level templates expect a box score and would find none.
+    tran_events = [e for e in events
+                   if e["reason"] in tran_tpl.TEMPLATES]
+    tran_ids = {e["gameId"] for e in tran_events}
+
+    mlb_events = [e for e in events
+                  if e["sport"] == "mlb" and e["gameId"] not in tran_ids]
     winter_events = [e for e in events
                      if e["sport"] in ("nhl", "nfl", "f1", "nba", "soccer")]
 
@@ -67,6 +75,11 @@ def build_questions(events):
     questions.extend(mlb_tpl.generate_milestones(milestone_events))
 
     questions.extend(win_tpl.generate(winter_events))
+
+    # Transaction context is corpus-wide: distractor teams are drawn from the
+    # clubs active in the same decade, so it is built once over every deal
+    # rather than per date.
+    questions.extend(tran_tpl.generate(tran_events))
     return questions
 
 
