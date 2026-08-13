@@ -20,6 +20,7 @@ against named accounts is more data than a trivia app can justify holding.
 """
 
 from datetime import datetime, timezone
+from decimal import Decimal
 
 import boto3
 from boto3.dynamodb.conditions import Key
@@ -45,6 +46,23 @@ def _now():
     return datetime.now(timezone.utc)
 
 
+def _storable(value):
+    """
+    DynamoDB rejects Python floats outright.
+
+    Averages are the whole point of this table and averages are floats, so
+    without this every nightly run fails - and it fails inside a scheduled job
+    where nobody is watching the response.
+    """
+    if isinstance(value, float):
+        return Decimal(str(value))
+    if isinstance(value, dict):
+        return {k: _storable(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_storable(v) for v in value]
+    return value
+
+
 def put_rollup(scope, period, stats):
     item = {
         "scope": scope,
@@ -52,7 +70,7 @@ def put_rollup(scope, period, stats):
         "computedAt": _now().isoformat(),
         **stats,
     }
-    _table().put_item(Item=item)
+    _table().put_item(Item=_storable(item))
     return item
 
 

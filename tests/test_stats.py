@@ -75,3 +75,22 @@ def test_a_session_with_no_answers_still_counts_as_a_round():
     session["answers"] = []
     out = stats.summarise([session])
     assert out["rounds"] == 1 and out["avgSeconds"] == 0
+
+
+def test_averages_survive_being_stored():
+    """
+    Regression. DynamoDB rejects Python floats, and averages are the whole
+    point of this table - so the nightly job failed on its first real run,
+    inside a scheduled task where nobody is watching the response.
+    """
+    from decimal import Decimal
+
+    stored = stats._storable(stats.summarise([_session(seconds=7.5, correct=4)]))
+    for key, value in stored.items():
+        assert not isinstance(value, float), f"{key} is still a float"
+    assert isinstance(stored["avgSeconds"], Decimal)
+
+
+def test_storable_leaves_other_types_alone():
+    assert stats._storable({"a": 1, "b": "x", "c": [1, 2]}) == {
+        "a": 1, "b": "x", "c": [1, 2]}
