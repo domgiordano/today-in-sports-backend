@@ -143,6 +143,7 @@ CLUE_BUILDERS = [
     lambda e, f: (f"It was {_sport_label(e)}, {_decade(e['year'])}."
                   if e.get("year") else None),
     lambda e, f: _by_the_numbers(e, f),
+    lambda e, f: f.get("_accolade"),
     lambda e, f: (f"One of the clubs involved was the {_club(f)}."
                   if _club(f) else None),
     lambda e, f: (f"The other club was the {f['fromTeam']}."
@@ -239,10 +240,20 @@ def clue_ladder(event, ctx=None):
     "which team was it" is a worse multiple-choice question, not a better
     format.
     """
-    facts = event.get("facts") or {}
+    facts = dict(event.get("facts") or {})
     answer = facts.get("player")
     if not answer:
         return []
+
+    # Career honours, when the awards source knows of any. This is what turns
+    # "who is this?" into "this three-time Cy Young winner" - the difference
+    # between a clue that narrows the field and one that does not.
+    accolades = (ctx or {}).get("accolades") or {}
+    if answer in accolades:
+        from lambdas.common.sources.mlb_awards import describe_accolades
+        phrase = describe_accolades(accolades[answer])
+        if phrase:
+            facts["_accolade"] = phrase
 
     clues = []
     for build in CLUE_BUILDERS:
@@ -327,6 +338,7 @@ def generate(events, ctx=None):
     Ordering is deliberately built per date rather than per event: the whole
     question is a comparison between events that share a calendar day.
     """
+    ctx = ctx or {}
     out = []
 
     by_date = {}
@@ -339,7 +351,7 @@ def generate(events, ctx=None):
                 out.append(q)
 
     for event in events:
-        for q in clue_ladder(event):
+        for q in clue_ladder(event, ctx):
             if not validate(q):
                 out.append(q)
 

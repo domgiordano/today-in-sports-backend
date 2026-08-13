@@ -26,6 +26,7 @@ from decimal import Decimal
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from lambdas.common import constants                              # noqa: E402
+from lambdas.common.templates import award_templates as award_tpl  # noqa: E402
 from lambdas.common.templates import lineup_templates as lineup_tpl  # noqa: E402
 from lambdas.common.templates import map_templates as map_tpl     # noqa: E402
 from lambdas.common.templates import mlb_templates as mlb_tpl     # noqa: E402
@@ -75,7 +76,7 @@ def status_for(question_id, decided):
     return decided.get(question_id, "draft")
 
 
-def build_questions(events, circuits=None):
+def build_questions(events, circuits=None, accolades=None):
     """
     Route each event to the templates for its own sport.
 
@@ -119,7 +120,7 @@ def build_questions(events, circuits=None):
     # Ordering and clue ladders are built over every event regardless of sport:
     # an ordering question is a comparison between events sharing a calendar
     # day, which is the one thing every source has in common.
-    questions.extend(ord_tpl.generate(events))
+    questions.extend(ord_tpl.generate(events, {'accolades': accolades or {}}))
 
     # Map questions need circuit coordinates, which only the f1db dump has. No
     # circuits loaded means no map questions, rather than questions pointing at
@@ -130,6 +131,10 @@ def build_questions(events, circuits=None):
     # Lineup questions need the starting nines the events now carry, and a
     # decoy pool built from the same corpus so no decoy ever really played.
     questions.extend(lineup_tpl.generate(events))
+
+    # Awards are their own event type, and their winner pools come from the
+    # awards themselves rather than a list anyone had to write.
+    questions.extend(award_tpl.generate(events))
     return questions
 
 
@@ -139,6 +144,7 @@ def main():
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--limit", type=int)
     ap.add_argument("--f1-cache", help="extracted f1db dump, for map questions")
+    ap.add_argument("--accolades", help="career award counts, for richer clues")
     args = ap.parse_args()
 
     events = load_events(args.events)
@@ -151,7 +157,13 @@ def main():
         circuits = f1db.load_circuits(args.f1_cache)
         print(f"circuits with coordinates: {len(circuits)}")
 
-    questions = build_questions(events, circuits)
+    accolades = {}
+    if args.accolades:
+        with open(args.accolades) as f:
+            accolades = json.load(f)
+        print(f"accolades loaded for {len(accolades)} players")
+
+    questions = build_questions(events, circuits, accolades)
     valid, rejected = [], 0
     reasons = collections.Counter()
     for q in questions:

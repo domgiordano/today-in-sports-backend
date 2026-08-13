@@ -285,8 +285,12 @@ def validate(q):
         problems.append("null interpolated into prompt")
     # An unresolved source id reaching a prompt reads as nonsense to a player
     # and is indistinguishable from a real name to the generator.
+    #
+    # The code must start with a letter. Retrosheet ids always do - CL4, NYA,
+    # BOS - and without that anchor the pattern also matches a bare year, so
+    # "the 2001 season" was being rejected as an unresolved team code.
     import re
-    if re.search(r"\bthe [A-Z0-9]{2,4}\b", q.get("prompt", "")):
+    if re.search(r"\bthe [A-Z][A-Z0-9]{1,3}\b", q.get("prompt", "")):
         problems.append("unresolved team code in prompt")
     if not q.get("sourceDatasetRef"):
         problems.append("missing sourceDatasetRef")
