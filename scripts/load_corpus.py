@@ -10,8 +10,10 @@ re-running overwrites rather than duplicating. That matters because the corpus
 is built incrementally — NBA finishes hours after MLB — and this will be run
 several times as sources land.
 
-Questions are written as `draft`. Nothing here approves anything; that is the
-review queue's job and it is deliberately a human one.
+New questions are written as `draft`. Nothing here approves anything; that is
+the review queue's job. An existing decision - approved, rejected or used - is
+read back and preserved, because a reload regenerates the question but has no
+business overturning the verdict on it.
 """
 
 import argparse
@@ -56,6 +58,19 @@ def load_events(path):
         if first.lstrip().startswith("["):
             return json.load(f)
         return [json.loads(line) for line in f if line.strip()]
+
+
+def status_for(question_id, decided):
+    """
+    The status a question should be written with.
+
+    A reload regenerates every question from the corpus, but a decision about
+    one belongs to whoever made it. This wrote "draft" unconditionally, which
+    silently reverted every approval on the next reload - 17,546 of them in a
+    single run - while the pruning code below carefully explained that a
+    decision is not a reload's to discard. Both halves now agree.
+    """
+    return decided.get(question_id, "draft")
 
 
 def build_questions(events):
@@ -171,13 +186,40 @@ def main():
     print(f"events written: {written}")
 
     questions_table = dynamo.Table(constants.QUESTIONS_TABLE_NAME)
+
+    # Existing decisions, so a reload does not overwrite them.
+    #
+    # This wrote `status: "draft"` unconditionally, which silently reverted
+    # every approval on the next reload - 17,546 of them, in one run - while
+    # the pruning code twenty lines below carefully explains that a decision is
+    # a human's and a reload has no business discarding it. Both halves now
+    # agree.
+    decided = {}
+    for status in ("approved", "rejected", "used"):
+        last_key = None
+        while True:
+            kwargs = {
+                "IndexName": constants.QUESTIONS_STATUS_INDEX,
+                "KeyConditionExpression": Key("status").eq(status),
+                "ProjectionExpression": "questionId",
+            }
+            if last_key:
+                kwargs["ExclusiveStartKey"] = last_key
+            resp = questions_table.query(**kwargs)
+            for item in resp.get("Items", []):
+                decided[item["questionId"]] = status
+            last_key = resp.get("LastEvaluatedKey")
+            if not last_key:
+                break
+    print(f"existing decisions preserved: {len(decided)}")
+
     written = 0
     with questions_table.batch_writer(overwrite_by_pkeys=["questionId"]) as batch:
         for q in valid:
             batch.put_item(Item=clean({
                 **q,
                 "sportTier": f"{q['sport']}#{q['tier']}",
-                "status": "draft",
+                "status": status_for(q["questionId"], decided),
             }))
             written += 1
             if written % 2000 == 0:

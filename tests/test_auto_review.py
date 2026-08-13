@@ -130,3 +130,21 @@ class TestAnachronisticNames:
     def test_baseball_is_exempt_because_it_resolves_historical_names(self):
         """CurrentNames.csv is what yields "Brooklyn Robins" for a 1920 game."""
         assert flags_for(_q(sport="mlb", year=1920)) == []
+
+
+class TestReloadPreservesDecisions:
+    """
+    Regression, and an expensive one. The loader wrote status "draft"
+    unconditionally, so the next reload silently reverted every approval -
+    17,546 in a single run - while the pruning code twenty lines below
+    carefully explained that a decision is not a reload's to discard.
+    """
+
+    def test_an_undecided_question_loads_as_a_draft(self):
+        from scripts.load_corpus import status_for
+        assert status_for("q1", {}) == "draft"
+
+    @pytest.mark.parametrize("status", ["approved", "rejected", "used"])
+    def test_an_existing_decision_survives_a_reload(self, status):
+        from scripts.load_corpus import status_for
+        assert status_for("q1", {"q1": status}) == status
