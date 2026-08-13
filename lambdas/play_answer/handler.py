@@ -9,7 +9,13 @@ Replaying an index is rejected rather than re-graded, so a player cannot retry a
 question they got wrong by resending it.
 """
 
-from lambdas.common import plays_dynamo, questions_dynamo, scoring
+from lambdas.common import (
+    badges,
+    plays_dynamo,
+    questions_dynamo,
+    scoring,
+    users_dynamo,
+)
 from lambdas.common.errors import handle_errors, NotFoundError, ValidationError
 from lambdas.common.logger import get_logger
 from lambdas.common.utility_helpers import parse_body, require_fields, success_response
@@ -27,7 +33,8 @@ def handler(event, context):
 
     identity = (body.get('deviceId') or '').strip()
     claims = ((event.get('requestContext') or {}).get('authorizer') or {})
-    if claims.get('sub'):
+    signed_in = bool(claims.get('sub'))
+    if signed_in:
         identity = claims['sub']
 
     if not identity:
@@ -111,6 +118,15 @@ def handler(event, context):
         payload['state'] = 'complete'
         payload['correctCount'] = int(session.get('correctCount', 0))
         payload['total'] = len(question_ids)
+
+        # Streaks and badges belong to an account, not a device. An anonymous
+        # player still plays, scores and appears on the day's board; what an
+        # account buys is a history that survives clearing a browser. A badge a
+        # cleared browser deletes is worse than no badge, and one that twenty
+        # devices can farm is not an achievement.
+        if signed_in:
+            _award(identity, claims, quiz_date, session, question_ids, payload)
+
         log.info(f'{quiz_date} complete: {payload["totalPoints"]} points')
         return success_response(payload)
 
@@ -119,3 +135,40 @@ def handler(event, context):
     payload['state'] = 'playing'
     payload['question'] = public_question(next_question, next_index, len(question_ids))
     return success_response(payload)
+
+
+def _award(identity, claims, quiz_date, session, question_ids, payload):
+    """
+    Fold a finished round into the player's history.
+
+    Deliberately best-effort: a failure here must not turn a completed quiz
+    into an error response. The player finished, the score is already stored
+    and returned, and a missing badge is a far smaller problem than a round
+    that appears to have failed.
+    """
+    try:
+        users_dynamo.ensure_user(identity, claims.get('email'))
+
+        served = [questions_dynamo.get_question(qid) for qid in question_ids]
+        served = [q for q in served if q]
+
+        user = users_dynamo.get_user(identity) or {}
+        play_count = int(user.get('playCount') or 0) + 1
+        streak = users_dynamo.next_streak(
+            user.get('lastPlayedDate'), quiz_date, user.get('currentStreak'))
+
+        awarded = badges.earned(session, served, streak, play_count)
+        updated, fresh = users_dynamo.record_play(
+            identity, quiz_date,
+            int(session.get('totalPoints', 0)),
+            int(session.get('correctCount', 0)),
+            awarded)
+
+        payload['streak'] = int(updated.get('currentStreak') or streak)
+        payload['longestStreak'] = int(updated.get('longestStreak') or 0)
+        payload['playCount'] = int(updated.get('playCount') or play_count)
+        # Only the new ones, so the client can show the moment it happens
+        # rather than listing a profile the player may never open.
+        payload['newBadges'] = badges.describe(fresh)
+    except Exception as exc:  # noqa: BLE001 - the round still counts
+        log.warning(f'could not record play history (ignored): {exc}')
