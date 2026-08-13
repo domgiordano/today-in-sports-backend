@@ -4,11 +4,10 @@ GET /admin/analytics - the numbers, precomputed.
 Reads rollups written by the nightly job. Every figure here is a GetItem, so
 the screen costs the same whether ten people play or ten thousand.
 
-Region slicing is not wired up yet and is deliberately absent rather than
-faked: it needs a location on the play row, which needs a decision about how
-coarse that location should be. Country and state are cheap and defensible;
-county needs a paid database, only means anything in one country, and is more
-location data than a trivia app can justify keeping against named accounts.
+Sliceable by group or by country. Region is self-declared on the profile and
+stored coarsely - a country, optionally a state - because that is enough to
+filter a leaderboard and anything finer would be more location data than a
+trivia game can justify holding against a named account.
 """
 
 from lambdas.common import groups_dynamo, stats_dynamo
@@ -28,7 +27,14 @@ def handler(event, context):
     params = get_query_params(event)
 
     group_id = params.get('groupId')
-    scope = f"group#{group_id}" if group_id else 'global'
+    country = (params.get('country') or '').strip().upper()
+
+    if group_id:
+        scope = f"group#{group_id}"
+    elif country:
+        scope = f"region#{country}"
+    else:
+        scope = 'global'
 
     periods = stats_dynamo.list_scope(scope)
 

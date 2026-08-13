@@ -13,7 +13,12 @@ from datetime import datetime, timedelta, timezone
 
 import boto3
 
-from lambdas.common import constants, groups_dynamo, stats_dynamo
+from lambdas.common import (
+    constants,
+    groups_dynamo,
+    stats_dynamo,
+    users_dynamo,
+)
 from lambdas.common.errors import handle_errors
 from lambdas.common.logger import get_logger
 from lambdas.common.utility_helpers import success_response
@@ -86,10 +91,29 @@ def handler(event, context):
                 scope, period, stats_dynamo.summarise(_within(theirs, days)))
             written += 1
 
-    log.info(f'wrote {written} rollups across {len(groups) + 1} scopes')
+    # One scope per country that anybody has declared. Self-declared and
+    # coarse - see users_dynamo.set_region for why it is not derived from an
+    # IP address.
+    by_country = {}
+    for user in users_dynamo.list_users(500):
+        country = user.get('country')
+        if country:
+            by_country.setdefault(country, set()).add(user['userId'])
+
+    for country, ids in by_country.items():
+        theirs = [s for s in sessions if s.get('identity') in ids]
+        for period, days in WINDOWS.items():
+            stats_dynamo.put_rollup(
+                f'region#{country}', period,
+                stats_dynamo.summarise(_within(theirs, days)))
+            written += 1
+
+    scopes = len(groups) + len(by_country) + 1
+    log.info(f'wrote {written} rollups across {scopes} scopes')
     return success_response({
         'sessions': len(sessions),
-        'scopes': len(groups) + 1,
+        'scopes': scopes,
+        'countries': sorted(by_country),
         'rollups': written,
     })
 

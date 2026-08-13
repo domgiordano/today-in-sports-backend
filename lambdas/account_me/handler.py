@@ -44,6 +44,8 @@ def handler(event, context):
         'totalPoints': int(user.get('totalPoints') or 0),
         'totalCorrect': int(user.get('totalCorrect') or 0),
         'lastPlayedDate': user.get('lastPlayedDate'),
+        'country': user.get('country'),
+        'subdivision': user.get('subdivision'),
         'badges': badges.describe(held),
         # The full catalogue too, so a profile can show what is still to earn
         # rather than only what has been.

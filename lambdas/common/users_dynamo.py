@@ -163,6 +163,61 @@ def record_play(user_id, quiz_date, points, correct_count, badge_ids):
     return updated, fresh
 
 
+# ISO 3166-1 alpha-2, and a free-text subdivision. Self-declared rather than
+# derived from an IP address: API Gateway hands over no location, so the
+# alternatives are a geolocation database in the layer or putting the API
+# behind CloudFront - and neither is worth it when people identify with a
+# country rather than with their VPN exit node.
+MAX_REGION_LEN = 60
+
+
+def set_region(user_id, country, subdivision=None):
+    """
+    Record where a player says they are.
+
+    Stored coarsely and deliberately: a country and, optionally, a state or
+    region. No city, no county, no coordinates. This is for a leaderboard
+    filter, and anything finer would be more location data than a trivia game
+    can justify keeping against a named account.
+    """
+    country = (country or "").strip().upper()[:2]
+    if not country:
+        raise ValueError("a country is required")
+
+    expression = "SET country = :c"
+    values = {":c": country}
+
+    subdivision = (subdivision or "").strip()[:MAX_REGION_LEN]
+    if subdivision:
+        expression += ", subdivision = :s"
+        values[":s"] = subdivision
+    else:
+        expression += " REMOVE subdivision"
+
+    resp = _table().update_item(
+        Key={"userId": user_id},
+        UpdateExpression=expression,
+        ExpressionAttributeValues=values,
+        ReturnValues="ALL_NEW",
+    )
+    return resp.get("Attributes")
+
+
+def clear_region(user_id):
+    """
+    Take a region back off.
+
+    Somebody who told us where they are should be able to stop telling us
+    without deleting their account.
+    """
+    resp = _table().update_item(
+        Key={"userId": user_id},
+        UpdateExpression="REMOVE country, subdivision",
+        ReturnValues="ALL_NEW",
+    )
+    return resp.get("Attributes")
+
+
 def set_display_name(user_id, name):
     resp = _table().update_item(
         Key={"userId": user_id},

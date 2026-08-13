@@ -166,3 +166,46 @@ class TestRecordPlay:
         values = table.update_item.call_args[1]["ExpressionAttributeValues"]
         assert values[":streak"] == 1, "a missed fortnight resets the streak"
         assert values[":longest"] == 20, "but the record stands"
+
+
+class TestRegion:
+    """
+    Self-declared, and coarse on purpose: a country and optionally a state.
+    No city, no county, no coordinates - this exists to filter a leaderboard.
+    """
+
+    @pytest.fixture
+    def table(self):
+        t = MagicMock()
+        t.update_item.return_value = {"Attributes": {"userId": "u1"}}
+        with patch.object(users, "_table", return_value=t):
+            yield t
+
+    def test_a_country_is_normalised_to_two_letters(self, table):
+        users.set_region("u1", "  gb  ")
+        assert table.update_item.call_args[1][
+            "ExpressionAttributeValues"][":c"] == "GB"
+
+    def test_a_country_is_required(self, table):
+        with pytest.raises(ValueError):
+            users.set_region("u1", "")
+
+    def test_a_subdivision_is_optional_and_removed_when_blank(self, table):
+        users.set_region("u1", "US", "")
+        assert "REMOVE subdivision" in table.update_item.call_args[1][
+            "UpdateExpression"]
+
+    def test_a_subdivision_is_stored_when_given(self, table):
+        users.set_region("u1", "US", "New York")
+        values = table.update_item.call_args[1]["ExpressionAttributeValues"]
+        assert values[":s"] == "New York"
+
+    def test_a_long_subdivision_is_truncated_rather_than_rejected(self, table):
+        users.set_region("u1", "US", "x" * 500)
+        values = table.update_item.call_args[1]["ExpressionAttributeValues"]
+        assert len(values[":s"]) <= users.MAX_REGION_LEN
+
+    def test_a_region_can_be_taken_back_off(self, table):
+        users.clear_region("u1")
+        assert "REMOVE country" in table.update_item.call_args[1][
+            "UpdateExpression"]
