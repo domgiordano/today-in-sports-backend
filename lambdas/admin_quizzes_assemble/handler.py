@@ -1,0 +1,74 @@
+"""
+POST /admin/quizzes/assemble - propose quizzes from the approved bank.
+
+Body: {"startDate": "2026-08-13", "days": 30}
+
+Proposals are drafts. Nothing reaches players until a human publishes it, and
+the assembler reports every constraint it had to relax rather than hiding a
+thin day behind a complete-looking quiz.
+"""
+
+from datetime import date, timedelta
+
+from lambdas.common.admin import require_admin
+from lambdas.common.assembler import assemble
+from lambdas.common.errors import handle_errors, ValidationError
+from lambdas.common.logger import get_logger
+from lambdas.common.utility_helpers import parse_body, success_response
+from lambdas.common import constants, questions_dynamo, quizzes_dynamo
+
+log = get_logger(__file__)
+
+HANDLER = 'admin_quizzes_assemble'
+
+
+@handle_errors(HANDLER)
+def handler(event, context):
+    require_admin(event)
+    body = parse_body(event)
+
+    start = body.get('startDate') or date.today().isoformat()
+    days = int(body.get('days', constants.DEFAULT_ASSEMBLE_DAYS))
+    if days < 1 or days > constants.MAX_ASSEMBLE_DAYS:
+        raise ValidationError(
+            message=f'days must be between 1 and {constants.MAX_ASSEMBLE_DAYS}',
+            handler=HANDLER,
+            function='handler',
+        )
+
+    try:
+        start_date = date.fromisoformat(start)
+    except ValueError:
+        raise ValidationError(
+            message=f"startDate '{start}' is not a yyyy-mm-dd date",
+            handler=HANDLER,
+            function='handler',
+        )
+
+    # Pull the approved bank once; every day draws from the same inventory.
+    bank = questions_dynamo.list_bank('approved', limit=1000)
+
+    proposed, skipped = [], []
+    for offset in range(days):
+        d = (start_date + timedelta(days=offset)).isoformat()
+
+        existing = quizzes_dynamo.get_quiz(d)
+        if existing and existing.get('status') == 'published':
+            skipped.append({'quizDate': d, 'reason': 'already published'})
+            continue
+
+        used = quizzes_dynamo.used_question_ids(d[5:])
+        result = assemble(d, bank, used_ids=used)
+        item = result.to_item()
+        quizzes_dynamo.put_draft(item)
+        proposed.append(item)
+
+    incomplete = [p for p in proposed if len(p['questionIds']) < constants.QUIZ_LENGTH]
+    log.info(f"assembled {len(proposed)} quizzes, {len(incomplete)} incomplete")
+
+    return success_response({
+        'proposed': proposed,
+        'skipped': skipped,
+        'incompleteCount': len(incomplete),
+        'bankSize': len(bank),
+    })
