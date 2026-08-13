@@ -128,3 +128,39 @@ def test_context_buckets_teams_by_decade():
     ])
     assert "Boston Red Sox" in ctx["teamsByEra"][191]
     assert "Boston Red Sox" not in ctx["teamsByEra"][197]
+
+
+def test_who_moved_distractors_are_contemporaries():
+    """
+    A 1996 question offering Wally Moses (1930s) and Dan Uggla (debuted 2006)
+    is solvable by elimination without knowing anything about the trade. Found
+    by playing a real quiz, not by a test.
+    """
+    ctx = dict(CTX, namesByEra={
+        199: ["Barry Bonds", "Ken Griffey", "Greg Maddux", "Frank Thomas"],
+        193: ["Wally Moses", "Jimmie Foxx"],
+        200: ["Dan Uggla", "Albert Pujols"],
+    })
+
+    qs = tpl.mc_who_moved(_event(year=1996), ctx)
+    assert len(qs) == 1
+    assert set(qs[0]["distractors"]) <= set(ctx["namesByEra"][199])
+
+
+def test_a_thin_era_widens_rather_than_dropping_the_question():
+    ctx = dict(CTX, namesByEra={
+        199: ["Barry Bonds"],
+        198: ["Rickey Henderson", "Wade Boggs"],
+        200: ["Albert Pujols", "Derek Jeter"],
+    })
+    qs = tpl.mc_who_moved(_event(year=1996), ctx)
+    assert len(qs) == 1, "an era with few names should widen, not give up"
+
+
+def test_context_buckets_players_by_decade():
+    ctx = tpl.build_context([
+        _event(year=1919, player="Babe Ruth"),
+        _event(year=1996, player="Gary Sheffield"),
+    ])
+    assert "Babe Ruth" in ctx["namesByEra"][191]
+    assert "Babe Ruth" not in ctx["namesByEra"][199]

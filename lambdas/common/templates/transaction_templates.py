@@ -49,6 +49,22 @@ def _q(event, qtype, prompt, answer, **kw):
     return q
 
 
+def _era_names(ctx, year):
+    """
+    Players active in the same era, widening only if that is too thin.
+
+    Falls back to the whole pool rather than emitting no question, but the
+    fallback is the exception: most decades have plenty of names.
+    """
+    by_era = ctx.get("namesByEra") or {}
+    names = list(by_era.get(year // 10) or [])
+    if len(names) < 4:
+        # One decade either side before giving up on era-matching entirely.
+        for adjacent in (year // 10 - 1, year // 10 + 1):
+            names.extend(by_era.get(adjacent) or [])
+    return names or list(ctx.get("starNames") or [])
+
+
 def _other_teams(ctx, exclude, when, n=3):
     """
     Teams that existed at the time of the deal, excluding the real answer.
@@ -109,10 +125,13 @@ def mc_who_moved(event, ctx):
     whether you know the deal rather than which name sounds familiar.
     """
     f = event["facts"]
-    pool = ctx.get("starNames") or []
     if not (f.get("player") and f.get("toTeam") and f.get("fromTeam")):
         return []
 
+    # Contemporaries, for the same reason the teams are: a 1996 question
+    # offering Wally Moses (1930s) and Dan Uggla (debuted 2006) is solvable by
+    # elimination without knowing anything about the trade.
+    pool = _era_names(ctx, event["year"])
     others = [n for n in pool if n not in (f.get("allPlayers") or [])]
     others.sort(key=lambda n: hashlib.sha1(f"{event['gameId']}{n}".encode()).hexdigest())
     if len(others) < 3:
@@ -180,6 +199,7 @@ def build_context(events):
     anyone had to write.
     """
     teams_by_era = {}
+    names_by_era = {}
     all_teams = set()
     stars = set()
 
@@ -193,9 +213,11 @@ def build_context(events):
                 all_teams.add(f[key])
         if f.get("player"):
             stars.add(f["player"])
+            names_by_era.setdefault(era, set()).add(f["player"])
 
     return {
         "teamsByEra": {k: sorted(v) for k, v in teams_by_era.items()},
+        "namesByEra": {k: sorted(v) for k, v in names_by_era.items()},
         "allTeams": sorted(all_teams),
         "starNames": sorted(stars),
     }
