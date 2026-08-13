@@ -283,6 +283,11 @@ def validate(q):
     # cosmetic one, and must never survive to review.
     if "None" in q.get("prompt", ""):
         problems.append("null interpolated into prompt")
+    # An unresolved source id reaching a prompt reads as nonsense to a player
+    # and is indistinguishable from a real name to the generator.
+    import re
+    if re.search(r"\bthe [A-Z0-9]{2,4}\b", q.get("prompt", "")):
+        problems.append("unresolved team code in prompt")
     if not q.get("sourceDatasetRef"):
         problems.append("missing sourceDatasetRef")
     if not q.get("sourceName"):

@@ -103,6 +103,7 @@ def main():
         return
 
     import boto3
+    from boto3.dynamodb.conditions import Key
     dynamo = boto3.resource("dynamodb")
 
     events_table = dynamo.Table(constants.EVENTS_TABLE_NAME)
@@ -132,6 +133,38 @@ def main():
             if written % 2000 == 0:
                 print(f"  questions written: {written}", flush=True)
     print(f"questions written: {written}")
+
+    # Prune stale drafts.
+    #
+    # Writing alone is not enough: when a fix stops a question being generated,
+    # the old row survives. That is how two "the CL4 routed the Pittsburgh
+    # Alleghenys" questions outlived the team-code guard that was written to
+    # kill them.
+    #
+    # Only `draft` rows are touched. Anything approved, rejected or used carries
+    # a human decision, and a reload has no business discarding that.
+    fresh_ids = {q["questionId"] for q in valid}
+    stale, last_key = [], None
+    while True:
+        kwargs = {
+            "IndexName": constants.QUESTIONS_STATUS_INDEX,
+            "KeyConditionExpression": Key("status").eq("draft"),
+            "ProjectionExpression": "questionId",
+        }
+        if last_key:
+            kwargs["ExclusiveStartKey"] = last_key
+        resp = questions_table.query(**kwargs)
+        stale.extend(i["questionId"] for i in resp.get("Items", [])
+                     if i["questionId"] not in fresh_ids)
+        last_key = resp.get("LastEvaluatedKey")
+        if not last_key:
+            break
+
+    if stale:
+        with questions_table.batch_writer() as batch:
+            for qid in stale:
+                batch.delete_item(Key={"questionId": qid})
+    print(f"stale drafts pruned: {len(stale)}")
 
 
 if __name__ == "__main__":

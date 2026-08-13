@@ -80,9 +80,25 @@ class TestTeamNames:
         assert rs.team_name(names, "BRO", date(1920, 10, 10)) == "Brooklyn Robins"
         assert rs.team_name(names, "BRO", date(1955, 9, 1)) == "Brooklyn Dodgers"
 
-    def test_unknown_code_falls_back_to_the_code(self, names):
+    def test_unknown_code_resolves_to_nothing_rather_than_the_code(self, names):
+        """
+        Falling back to the raw code is what produced "the CL4 routed the
+        Pittsburgh Alleghenys" — CurrentNames.csv does not cover every club that
+        ever played. A missing name is a game to skip, not a name to invent.
+        """
         from datetime import date
-        assert rs.team_name(names, "ZZZ", date(1991, 5, 1)) == "ZZZ"
+        assert rs.team_name(names, "ZZZ", date(1991, 5, 1)) is None
+
+    @pytest.mark.parametrize("value,is_code", [
+        ("CL4", True),
+        ("PIT", True),
+        ("", True),
+        (None, True),
+        ("Pittsburgh Alleghenys", False),
+        ("Ajax", False),
+    ])
+    def test_raw_codes_are_recognised(self, value, is_code):
+        assert rs.looks_like_a_raw_code(value) is is_code
 
 
 class TestNormalize:

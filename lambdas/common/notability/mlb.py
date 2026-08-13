@@ -28,13 +28,21 @@ def _other(side):
 
 def has_usable_teams(game):
     """
-    Both team names must be present.
+    Both team names must be present AND be actual names.
 
-    Some Negro Leagues rows carry a null opponent, which otherwise interpolates
-    straight into a prompt as "the None". Cheaper to reject the game than to
-    special-case every template.
+    Two ways this fails in real data. Some Negro Leagues rows carry a null
+    opponent, which interpolates into a prompt as "the None". And Retrosheet's
+    name table does not cover every historical club — the 1890 Cleveland entry
+    keyed `CL4` is missing — which produced "the CL4 routed the Pittsburgh
+    Alleghenys". Cheaper to reject the game than to special-case every template.
     """
-    return bool(game["away"].get("team")) and bool(game["home"].get("team"))
+    from lambdas.common.sources.retrosheet import looks_like_a_raw_code
+
+    for side in TEAM_SIDES:
+        name = game[side].get("team")
+        if not name or looks_like_a_raw_code(name):
+            return False
+    return True
 
 
 # MLB's records now officially include the Negro Leagues, and sportId=1 returns

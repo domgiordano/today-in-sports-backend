@@ -161,10 +161,18 @@ def _parse_mdy(s):
 
 
 def team_name(lookup, code, game_date):
-    """Resolve a code to the franchise name in use on that date."""
+    """
+    Resolve a code to the franchise name in use on that date.
+
+    Returns None when the code cannot be resolved, rather than the code itself.
+    CurrentNames.csv does not cover every club that ever played — the 1890
+    Cleveland entry keyed `CL4` is absent — and falling back to the raw code
+    puts it straight into a question: "the CL4 routed the Pittsburgh
+    Alleghenys". A missing name is a game to skip, not a name to invent.
+    """
     options = lookup.get(code)
     if not options:
-        return code
+        return None
     for o in options:
         start, end = o["start"], o["end"]
         if start and game_date < start:
@@ -173,6 +181,20 @@ def team_name(lookup, code, game_date):
             continue
         return o["name"]
     return options[-1]["name"]
+
+
+def looks_like_a_raw_code(name):
+    """
+    A short all-caps token is a Retrosheet id, not a team name.
+
+    Belt and braces alongside `team_name` returning None: a lookup could also
+    resolve to something equally useless, and either way it must not reach a
+    prompt.
+    """
+    if not name:
+        return True
+    stripped = name.strip()
+    return len(stripped) <= 4 and stripped.upper() == stripped
 
 
 # ---------------------------------------------------------------- normalise
