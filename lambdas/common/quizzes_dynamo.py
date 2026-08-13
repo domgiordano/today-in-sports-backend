@@ -123,11 +123,23 @@ def used_question_ids(mmdd):
     Every question already used on this calendar date in any year.
 
     This is what stops a returning player seeing a repeat when August 13 comes
-    round again.
+    round again — the whole premise is date-anchored, so a date recurs annually.
+
+    Paginated deliberately. A bare scan returns at most 1 MB and silently stops;
+    after a couple of years of quizzes that would quietly start missing older
+    entries, and the failure looks like a repeat rather than a bug.
     """
-    resp = _table().scan(ProjectionExpression="quizDate, questionIds")
     used = set()
-    for item in resp.get("Items", []):
-        if item.get("quizDate", "")[5:] == mmdd:
-            used.update(item.get("questionIds") or [])
+    last_key = None
+    while True:
+        kwargs = {"ProjectionExpression": "quizDate, questionIds"}
+        if last_key:
+            kwargs["ExclusiveStartKey"] = last_key
+        resp = _table().scan(**kwargs)
+        for item in resp.get("Items", []):
+            if item.get("quizDate", "")[5:] == mmdd:
+                used.update(item.get("questionIds") or [])
+        last_key = resp.get("LastEvaluatedKey")
+        if not last_key:
+            break
     return used
