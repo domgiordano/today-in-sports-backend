@@ -25,6 +25,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from lambdas.common import constants                              # noqa: E402
 from lambdas.common.templates import mlb_templates as mlb_tpl     # noqa: E402
+from lambdas.common.templates import ordering_templates as ord_tpl  # noqa: E402
 from lambdas.common.templates import transaction_templates as tran_tpl  # noqa: E402
 from lambdas.common.templates import winter_templates as win_tpl  # noqa: E402
 
@@ -97,6 +98,11 @@ def build_questions(events):
     # clubs active in the same decade, so it is built once over every deal
     # rather than per date.
     questions.extend(tran_tpl.generate(tran_events))
+
+    # Ordering and clue ladders are built over every event regardless of sport:
+    # an ordering question is a comparison between events sharing a calendar
+    # day, which is the one thing every source has in common.
+    questions.extend(ord_tpl.generate(events))
     return questions
 
 
@@ -113,9 +119,21 @@ def main():
 
     questions = build_questions(events)
     valid, rejected = [], 0
+    reasons = collections.Counter()
     for q in questions:
-        if mlb_tpl.validate(q):
+        # Validation is routed by format. The MLB validator knows about
+        # distractors and numeric answers; it has no opinion on whether an
+        # ordering question's items are a permutation of its answer, and
+        # running everything through it would wave those questions straight
+        # past the checks written for them.
+        checker = (ord_tpl.validate
+                   if q["type"] in ("ordering", "clue")
+                   else mlb_tpl.validate)
+        problems = checker(q)
+        if problems:
             rejected += 1
+            for p in problems:
+                reasons[p] += 1
         else:
             valid.append(q)
 
@@ -123,6 +141,8 @@ def main():
         valid = valid[:args.limit]
 
     print(f"questions: {len(valid)} valid, {rejected} rejected by validation")
+    for reason, count in reasons.most_common(6):
+        print(f"    rejected: {count:5d}  {reason}")
     print("  by type:", dict(collections.Counter(q["type"] for q in valid)))
     print("  by tier:", dict(sorted(collections.Counter(q["tier"] for q in valid).items())))
     dates = len({q["mmdd"] for q in valid})

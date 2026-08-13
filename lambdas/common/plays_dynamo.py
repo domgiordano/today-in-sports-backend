@@ -150,6 +150,36 @@ def hint_used(session, index):
     return int(index) in set(session.get("hintsUsed") or set())
 
 
+def record_clue(identity, quiz_date, index):
+    """
+    Take one more rung of a clue ladder.
+
+    Counted rather than flagged, because the ladder decays per clue. Server-side
+    for the same reason the multiple-choice hint is: the clue is released by the
+    call that increments this, so taking one and being charged for it are the
+    same action.
+
+    Appended rather than added to a set: a set deduplicates, so taking three
+    rungs on one question would have counted as one and the ladder would have
+    decayed no further than its first step.
+    """
+    resp = _table().update_item(
+        Key={"playId": session_key(identity, quiz_date)},
+        UpdateExpression=(
+            "SET cluesTaken = list_append(if_not_exists(cluesTaken, :empty), :i)"
+        ),
+        ExpressionAttributeValues={":i": [str(int(index))], ":empty": []},
+        ReturnValues="ALL_NEW",
+    )
+    return resp.get("Attributes")
+
+
+def clues_taken(session, index):
+    """How many extra rungs have been paid for on this question."""
+    taken = session.get("cluesTaken") or []
+    return sum(1 for entry in taken if str(entry).split("#")[0] == str(index))
+
+
 def elapsed_since_served(session):
     """Seconds between serving the question and now, or None if never served."""
     served = session.get("servedAt")

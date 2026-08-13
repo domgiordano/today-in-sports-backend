@@ -80,6 +80,31 @@ def handler(event, context):
             message='question not found',
             handler=HANDLER, function='handler')
 
+    # A clue ladder's "hint" is its next rung. Same endpoint because it is the
+    # same bargain - information now, points later - and one place to enforce
+    # that the release and the charge cannot be separated.
+    if question.get('type') == 'clue':
+        clues = list(question.get('clues') or [])
+        taken = plays_dynamo.clues_taken(session, index)
+
+        if taken + 1 >= len(clues):
+            raise ValidationError(
+                message='every clue has already been taken',
+                handler=HANDLER, function='handler')
+
+        plays_dynamo.record_clue(identity, quiz_date, index)
+        taken += 1
+        log.info(f'clue {taken} taken on {quiz_date} index {index}')
+
+        return success_response({
+            'quizDate': quiz_date,
+            'index': index,
+            'clues': clues[:taken + 1],
+            'cluesTaken': taken,
+            'clueCount': len(clues),
+            'creditMultiplier': scoring.clue_credit(taken, len(clues)),
+        })
+
     options = options_for(question)
     if not options:
         raise ValidationError(

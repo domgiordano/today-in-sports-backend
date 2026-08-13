@@ -47,6 +47,11 @@ NUMERIC_ZERO_AT = 6.0
 # and the scoring should say so.
 HINT_CREDIT = 0.6
 
+# The least a clue-ladder question can be worth once every clue has been taken.
+# Not zero: a player who works it out from the last clue still knew something,
+# and a question that becomes worthless is one people stop finishing.
+CLUE_FLOOR = 0.25
+
 
 def base_value(tier):
     return TIER_BASE.get(int(tier or 1), TIER_BASE[1])
@@ -102,7 +107,54 @@ def numeric_credit(answer, guess, tolerance):
     return max(0.0, 1.0 - (distance - unit) / (zero_at - unit))
 
 
-def grade(question, submitted, seconds, hint_used=False):
+def ordering_credit(answer, submitted):
+    """
+    Fraction of correctly ordered pairs — Kendall tau, normalised to 0..1.
+
+    Deliberately not all-or-nothing. Getting four items into order with one
+    adjacent pair swapped is five of six pairs right, and scoring that as zero
+    would make the format feel arbitrary rather than hard. It is also legible:
+    "you had one pair the wrong way round" is a thing a player can understand
+    without being shown the working.
+    """
+    if not isinstance(answer, (list, tuple)) or len(answer) < 2:
+        return 0.0
+    if not isinstance(submitted, (list, tuple)):
+        return 0.0
+
+    # An answer that is not a permutation of the items is not a partial answer.
+    if sorted(map(str, submitted)) != sorted(map(str, answer)):
+        return 0.0
+
+    position = {str(item): i for i, item in enumerate(answer)}
+    got = [position[str(item)] for item in submitted]
+
+    total = concordant = 0
+    for i in range(len(got)):
+        for j in range(i + 1, len(got)):
+            total += 1
+            if got[i] < got[j]:
+                concordant += 1
+
+    return concordant / total if total else 0.0
+
+
+def clue_credit(clues_taken, clue_count):
+    """
+    What a right answer is worth after taking `clues_taken` hints.
+
+    The decay is the credit, so the clue ladder needs no grading of its own:
+    answering on the first clue is full value and every further clue costs an
+    equal share, down to a floor that keeps the last clue worth playing for.
+    """
+    if not clue_count or clues_taken <= 0:
+        return 1.0
+    taken = min(int(clues_taken), int(clue_count) - 1)
+    step = (1.0 - CLUE_FLOOR) / max(int(clue_count) - 1, 1)
+    return max(CLUE_FLOOR, 1.0 - step * taken)
+
+
+def grade(question, submitted, seconds, hint_used=False, clues_taken=0):
     """
     Grade one answer.
 
@@ -117,7 +169,11 @@ def grade(question, submitted, seconds, hint_used=False):
     base = base_value(question.get("tier"))
     qtype = question.get("type")
 
-    if qtype == "numeric":
+    if qtype == "ordering":
+        credit = ordering_credit(question.get("answer"), submitted)
+        # Full marks means every pair in the right place, not merely a good try.
+        correct = credit >= 1.0
+    elif qtype == "numeric":
         credit = numeric_credit(
             question.get("numericAnswer", question.get("answer")),
             submitted,
@@ -134,6 +190,9 @@ def grade(question, submitted, seconds, hint_used=False):
     if hint_used:
         credit *= HINT_CREDIT
 
+    if clues_taken:
+        credit *= clue_credit(clues_taken, question.get("clueCount"))
+
     accuracy_points = round(base * credit)
 
     # The bonus rides on what was actually earned, so a wrong answer earns no
@@ -148,6 +207,7 @@ def grade(question, submitted, seconds, hint_used=False):
         "correct": correct,
         "credit": round(credit, 3),
         "hintUsed": bool(hint_used),
+        "cluesTaken": int(clues_taken or 0),
         "basePoints": base,
         "seconds": round(seconds, 2) if seconds is not None else None,
     }

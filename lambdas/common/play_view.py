@@ -37,7 +37,8 @@ def options_for(question):
     )
 
 
-def public_question(question, index, total, with_options=False):
+def public_question(question, index, total, with_options=False,
+                    clues_taken=0):
     """
     Strip a question down to what a player may see.
 
@@ -52,9 +53,23 @@ def public_question(question, index, total, with_options=False):
     depend on the honesty of something we do not control.
     """
     show_options = with_options and question.get("type") == "mc"
+    qtype = question.get("type")
+
+    # A clue ladder ships only the rungs already paid for. Sending all five and
+    # revealing them client-side would put the whole ladder in the payload and
+    # make the decay a suggestion.
+    clues = None
+    if qtype == "clue":
+        clues = list(question.get("clues") or [])[:max(1, int(clues_taken) + 1)]
 
     return {
-        "hintAvailable": question.get("type") == "mc" and not show_options,
+        "hintAvailable": qtype == "mc" and not show_options,
+        # Ordering items are shuffled at generation time and stored that way,
+        # so the order here carries no signal about the answer.
+        "items": list(question.get("items") or []) if qtype == "ordering" else None,
+        "clues": clues,
+        "clueCount": question.get("clueCount") if qtype == "clue" else None,
+        "cluesTaken": int(clues_taken) if qtype == "clue" else None,
         "index": index,
         "total": total,
         "questionId": question["questionId"],

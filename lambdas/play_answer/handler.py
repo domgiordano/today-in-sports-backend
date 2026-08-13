@@ -78,7 +78,9 @@ def handler(event, context):
     # the score.
     seconds = plays_dynamo.elapsed_since_served(session)
     used_hint = plays_dynamo.hint_used(session, index)
-    result = scoring.grade(question, body.get('answer'), seconds, used_hint)
+    taken_clues = plays_dynamo.clues_taken(session, index)
+    result = scoring.grade(question, body.get('answer'), seconds, used_hint,
+                           taken_clues)
 
     session = plays_dynamo.record_answer(identity, quiz_date, index, body.get('answer'), result)
 
@@ -91,6 +93,7 @@ def handler(event, context):
         'accuracyPoints': result['accuracyPoints'],
         'timeBonus': result['timeBonus'],
         'hintUsed': result['hintUsed'],
+        'cluesTaken': result['cluesTaken'],
         'seconds': result['seconds'],
         'totalPoints': int(session.get('totalPoints', 0)),
         # Revealed only now that the answer is locked in.

@@ -199,3 +199,66 @@ class TestHintLadder:
         fast_hinted = scoring.grade(self._q(), "Ryan", 0.0, hint_used=True)
         slow_clean = scoring.grade(self._q(), "Ryan", 120.0)
         assert slow_clean["points"] > fast_hinted["points"]
+
+
+class TestOrderingCredit:
+    """
+    Per-pair credit, not all-or-nothing. One transposition in four items is
+    five of six pairs right, and calling that zero would make the format feel
+    arbitrary rather than hard.
+    """
+
+    ITEMS = ["a", "b", "c", "d"]
+
+    def test_a_perfect_order_is_full_credit(self):
+        assert scoring.ordering_credit(self.ITEMS, ["a", "b", "c", "d"]) == 1.0
+
+    def test_a_fully_reversed_order_earns_nothing(self):
+        assert scoring.ordering_credit(self.ITEMS, ["d", "c", "b", "a"]) == 0.0
+
+    def test_one_swapped_pair_keeps_most_of_the_credit(self):
+        credit = scoring.ordering_credit(self.ITEMS, ["b", "a", "c", "d"])
+        assert credit == pytest.approx(5 / 6)
+
+    def test_only_a_perfect_order_counts_as_correct(self):
+        q = {"type": "ordering", "tier": 3, "answer": self.ITEMS}
+        assert scoring.grade(q, ["a", "b", "c", "d"], 5.0)["correct"] is True
+        assert scoring.grade(q, ["b", "a", "c", "d"], 5.0)["correct"] is False
+
+    def test_partial_credit_still_scores_points(self):
+        q = {"type": "ordering", "tier": 3, "answer": self.ITEMS}
+        assert scoring.grade(q, ["b", "a", "c", "d"], 5.0)["points"] > 0
+
+    @pytest.mark.parametrize("submitted", [
+        ["a", "b", "c"],            # too few
+        ["a", "b", "c", "z"],       # not the same items
+        "abcd",                     # not a list
+        None,
+    ])
+    def test_anything_that_is_not_a_permutation_earns_nothing(self, submitted):
+        assert scoring.ordering_credit(self.ITEMS, submitted) == 0.0
+
+
+class TestClueLadder:
+    """The decay is the credit, so the ladder needs no grading of its own."""
+
+    def test_answering_on_the_first_clue_is_full_value(self):
+        assert scoring.clue_credit(0, 5) == 1.0
+
+    def test_each_clue_costs_and_the_order_is_monotonic(self):
+        values = [scoring.clue_credit(n, 5) for n in range(5)]
+        assert values == sorted(values, reverse=True)
+
+    def test_the_last_clue_is_still_worth_playing_for(self):
+        """A question that becomes worthless is one people stop finishing."""
+        assert scoring.clue_credit(99, 5) == scoring.CLUE_FLOOR
+        assert scoring.CLUE_FLOOR > 0
+
+    def test_clues_scale_the_score(self):
+        q = {"type": "mc", "tier": 5, "answer": "Nolan Ryan", "clueCount": 5}
+        early = scoring.grade(q, "Ryan", 5.0, clues_taken=0)
+        late = scoring.grade(q, "Ryan", 5.0, clues_taken=4)
+
+        assert early["points"] > late["points"]
+        assert late["points"] > 0
+        assert late["correct"] is True
