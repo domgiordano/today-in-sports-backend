@@ -125,7 +125,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
-          python-version: "3.12"
+          python-version: "3.13"
 
       - name: Install dependencies
         run: |
@@ -155,13 +155,13 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
-          python-version: "3.12"
+          python-version: "3.13"
 
       - name: Package layer
         run: |
           mkdir -p python/lambdas
           cp -r lambdas/common python/lambdas/
-          python3.12 -m pip install --platform manylinux2014_x86_64 --only-binary=:all: -t python/ -r requirements.txt
+          python3.13 -m pip install --platform manylinux2014_x86_64 --only-binary=:all: -t python/ -r requirements.txt
           zip -r today-in-sports-shared-packages.zip python
 
       - name: Deploy layer
@@ -173,7 +173,7 @@ jobs:
           LAYER_OUTPUT=$(aws lambda publish-layer-version \
             --layer-name today-in-sports-shared-packages \
             --zip-file fileb://today-in-sports-shared-packages.zip \
-            --compatible-runtimes python3.12 \
+            --compatible-runtimes python3.13 \
             --region $AWS_REGION \
             --output json)
 
@@ -202,7 +202,7 @@ jobs:
           echo "Updating layer and runtime for $FUNCTION_NAME"
           aws lambda update-function-configuration \
             --function-name $FUNCTION_NAME \
-            --runtime python3.12 \
+            --runtime python3.13 \
             --layers ${{ needs.deploy-layer.outputs.layer_arn }} \
             --region $AWS_REGION || echo "Function $FUNCTION_NAME not found, skipping..."
 
@@ -224,7 +224,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
-          python-version: "3.12"
+          python-version: "3.13"
 
       - name: Package lambda
         run: |
