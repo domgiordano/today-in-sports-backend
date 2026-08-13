@@ -15,8 +15,13 @@ reach the client. The whole design follows from that:
   * **One attempt per day per identity**, enforced by the session key.
 
 Anonymous replay is still possible — clear storage, play again — and that is
-accepted rather than fought. It is made worthless instead: an anonymous player
-sees where they would have ranked but does not post to the global board.
+accepted rather than fought. A daily board is low stakes, and refusing to show a
+visitor their own result costs more than the cheating does. The device id makes
+casual replay inconvenient, which is the honest level of protection here.
+
+What an account buys is persistence: a profile, a streak, and a history that
+survives clearing a browser. That is the real incentive to sign up, rather than
+withholding the leaderboard.
 """
 
 import uuid
@@ -185,3 +190,76 @@ def is_complete(session):
 def already_answered(session, index):
     return any(int(a.get("index", -1)) == int(index)
                for a in (session.get("answers") or []))
+
+
+# --------------------------------------------------------------- identity
+
+MAX_NAME_LENGTH = 24
+
+
+def set_display_name(identity, quiz_date, name):
+    """
+    Attach a name to a finished session so it can appear on the board.
+
+    Only allowed once the quiz is complete — a name set mid-quiz would let a
+    player see how they were doing before deciding whether to be identified.
+    """
+    clean = (name or "").strip()[:MAX_NAME_LENGTH]
+    if not clean:
+        raise ValueError("a display name cannot be empty")
+
+    resp = _table().update_item(
+        Key={"playId": session_key(identity, quiz_date)},
+        UpdateExpression="SET displayName = :n",
+        ConditionExpression="attribute_exists(playId) AND attribute_exists(completedAt)",
+        ExpressionAttributeValues={":n": clean},
+        ReturnValues="ALL_NEW",
+    )
+    return resp.get("Attributes")
+
+
+def leaderboard(quiz_date, limit=50):
+    """
+    Top scores for a day, highest first.
+
+    Reads the quizDate-totalPoints index, so this is one query against a single
+    partition rather than a scan. At real volume that partition becomes a write
+    hotspot and needs sharding across ~10 keys with a merge on read — noted
+    rather than built, because sharding an empty board is premature.
+    """
+    resp = _table().query(
+        IndexName="quizDate-totalPoints-index",
+        KeyConditionExpression=Key("quizDate").eq(quiz_date),
+        ScanIndexForward=False,
+        Limit=min(int(limit), 200),
+    )
+    rows = [r for r in resp.get("Items", []) if r.get("completedAt")]
+    return rows
+
+
+def rank_for(quiz_date, total_points):
+    """
+    How many finished players scored higher.
+
+    Exact rank is fine while the board is small. Past a few thousand players a
+    day this wants a bucketed histogram with atomic counters, reporting a
+    percentile instead — exact global rank is expensive and nobody needs it.
+    """
+    higher, key = 0, None
+    while True:
+        kwargs = {
+            "IndexName": "quizDate-totalPoints-index",
+            "KeyConditionExpression": (
+                Key("quizDate").eq(quiz_date)
+                & Key("totalPoints").gt(int(total_points))
+            ),
+            "Select": "COUNT",
+        }
+        if key:
+            kwargs["ExclusiveStartKey"] = key
+        resp = _table().query(**kwargs)
+        higher += resp.get("Count", 0)
+        key = resp.get("LastEvaluatedKey")
+        if not key:
+            break
+    return higher + 1
