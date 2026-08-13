@@ -266,6 +266,17 @@ def _resolve_caller_identity(event: dict, field: str) -> str:
             log.debug(f"caller_identity field={field} auth_path=context")
             return ctx_value
 
+        # A Cognito user-pool authorizer nests the verified JWT claims one level
+        # deeper, under `authorizer.claims`, rather than flattening them. Without
+        # this the claims are present and simply never read, and every admin call
+        # returns 401 no matter who is signed in.
+        claims = authorizer.get("claims")
+        if isinstance(claims, dict):
+            claim_value = claims.get(field)
+            if isinstance(claim_value, str) and claim_value:
+                log.debug(f"caller_identity field={field} auth_path=cognito_claims")
+                return claim_value
+
     # 2. Fallback: query string.
     query_params = get_query_params(event)
     qs_value = query_params.get(field) if isinstance(query_params, dict) else None
