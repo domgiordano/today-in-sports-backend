@@ -1,0 +1,104 @@
+[
+ {
+  "sport": "f1",
+  "league": "Formula One",
+  "leagueId": "F1",
+  "gameId": "1",
+  "gameDate": "1950-05-13",
+  "year": 1950,
+  "round": 1,
+  "officialName": "1950 RAC British Grand Prix",
+  "grandPrix": "British Grand Prix",
+  "circuitId": "silverstone",
+  "laps": 70,
+  "championshipDecider": false,
+  "constructorsDecider": false,
+  "winner": {
+   "driverId": "nino-farina",
+   "driver": "Emilio Giuseppe Farina",
+   "constructorId": "alfa-romeo",
+   "constructor": "Alfa Romeo Racing",
+   "gridPosition": 1,
+   "polePosition": true,
+   "careerWins": 1,
+   "careerStarts": 1
+  },
+  "podium": [
+   "Emilio Giuseppe Farina",
+   "Luigi Cristiano Fagioli",
+   "Reginald Parnell"
+  ],
+  "finishers": 12,
+  "entries": 23,
+  "sourceName": "f1db",
+  "sourceDatasetRef": "https://github.com/f1db/f1db/releases/latest#race=1"
+ },
+ {
+  "sport": "f1",
+  "league": "Formula One",
+  "leagueId": "F1",
+  "gameId": "803",
+  "gameDate": "2008-11-02",
+  "year": 2008,
+  "round": 18,
+  "officialName": "Formula 1 Grande Pr\u00eamio do Brasil 2008",
+  "grandPrix": "Brazilian Grand Prix",
+  "circuitId": "interlagos",
+  "laps": 71,
+  "championshipDecider": true,
+  "constructorsDecider": true,
+  "winner": {
+   "driverId": "felipe-massa",
+   "driver": "Felipe Massa",
+   "constructorId": "ferrari",
+   "constructor": "Scuderia Ferrari",
+   "gridPosition": 1,
+   "polePosition": true,
+   "careerWins": 11,
+   "careerStarts": 106
+  },
+  "podium": [
+   "Felipe Massa",
+   "Fernando Alonso D\u00edaz",
+   "Kimi-Matias R\u00e4ikk\u00f6nen"
+  ],
+  "finishers": 18,
+  "entries": 20,
+  "sourceName": "f1db",
+  "sourceDatasetRef": "https://github.com/f1db/f1db/releases/latest#race=803"
+ },
+ {
+  "sport": "f1",
+  "league": "Formula One",
+  "leagueId": "F1",
+  "gameId": "1057",
+  "gameDate": "2021-12-12",
+  "year": 2021,
+  "round": 22,
+  "officialName": "Formula 1 Etihad Airways Abu Dhabi Grand Prix 2021",
+  "grandPrix": "Abu Dhabi Grand Prix",
+  "circuitId": "yas-marina",
+  "laps": 58,
+  "championshipDecider": true,
+  "constructorsDecider": true,
+  "winner": {
+   "driverId": "max-verstappen",
+   "driver": "Max Emilian Verstappen",
+   "constructorId": "red-bull",
+   "constructor": "Red Bull Racing",
+   "gridPosition": 1,
+   "polePosition": true,
+   "careerWins": 20,
+   "careerStarts": 141
+  },
+  "podium": [
+   "Max Emilian Verstappen",
+   "Lewis Carl Davidson Hamilton",
+   "Carlos Sainz V\u00e1zquez de Castro"
+  ],
+  "finishers": 15,
+  "entries": 20,
+  "sourceName": "f1db",
+  "sourceDatasetRef": "https://github.com/f1db/f1db/releases/latest#race=1057"
+ }
+]

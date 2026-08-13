@@ -1,0 +1,130 @@
+[
+ {
+  "sport": "nfl",
+  "gameId": "2001_21_STL_NE",
+  "gameDate": "2002-02-03",
+  "season": 2001,
+  "week": 21,
+  "gameType": "SB",
+  "seriesDescription": "Super Bowl",
+  "isPlayoff": true,
+  "overtime": false,
+  "status": "Final",
+  "combinedPoints": 37,
+  "margin": 3,
+  "away": {
+   "team": "St. Louis Rams",
+   "teamId": "STL",
+   "league": "NFL",
+   "leagueId": "NFL",
+   "score": 17,
+   "isWinner": false
+  },
+  "home": {
+   "team": "New England Patriots",
+   "teamId": "NE",
+   "league": "NFL",
+   "leagueId": "NFL",
+   "score": 20,
+   "isWinner": true
+  },
+  "sourceName": "nflverse",
+  "sourceDatasetRef": "https://github.com/nflverse/nflverse-data/releases/download/schedules/games.csv#game_id=2001_21_STL_NE"
+ },
+ {
+  "sport": "nfl",
+  "gameId": "2017_21_PHI_NE",
+  "gameDate": "2018-02-04",
+  "season": 2017,
+  "week": 21,
+  "gameType": "SB",
+  "seriesDescription": "Super Bowl",
+  "isPlayoff": true,
+  "overtime": false,
+  "status": "Final",
+  "combinedPoints": 74,
+  "margin": 8,
+  "away": {
+   "team": "Philadelphia Eagles",
+   "teamId": "PHI",
+   "league": "NFL",
+   "leagueId": "NFL",
+   "score": 41,
+   "isWinner": true
+  },
+  "home": {
+   "team": "New England Patriots",
+   "teamId": "NE",
+   "league": "NFL",
+   "leagueId": "NFL",
+   "score": 33,
+   "isWinner": false
+  },
+  "sourceName": "nflverse",
+  "sourceDatasetRef": "https://github.com/nflverse/nflverse-data/releases/download/schedules/games.csv#game_id=2017_21_PHI_NE"
+ },
+ {
+  "sport": "nfl",
+  "gameId": "2024_22_KC_PHI",
+  "gameDate": "2025-02-09",
+  "season": 2024,
+  "week": 22,
+  "gameType": "SB",
+  "seriesDescription": "Super Bowl",
+  "isPlayoff": true,
+  "overtime": false,
+  "status": "Final",
+  "combinedPoints": 62,
+  "margin": 18,
+  "away": {
+   "team": "Kansas City Chiefs",
+   "teamId": "KC",
+   "league": "NFL",
+   "leagueId": "NFL",
+   "score": 22,
+   "isWinner": false
+  },
+  "home": {
+   "team": "Philadelphia Eagles",
+   "teamId": "PHI",
+   "league": "NFL",
+   "leagueId": "NFL",
+   "score": 40,
+   "isWinner": true
+  },
+  "sourceName": "nflverse",
+  "sourceDatasetRef": "https://github.com/nflverse/nflverse-data/releases/download/schedules/games.csv#game_id=2024_22_KC_PHI"
+ },
+ {
+  "sport": "nfl",
+  "gameId": "2018_01_BUF_BAL",
+  "gameDate": "2018-09-09",
+  "season": 2018,
+  "week": 1,
+  "gameType": "REG",
+  "seriesDescription": "Regular Season",
+  "isPlayoff": false,
+  "overtime": false,
+  "status": "Final",
+  "combinedPoints": 50,
+  "margin": 44,
+  "away": {
+   "team": "Buffalo Bills",
+   "teamId": "BUF",
+   "league": "NFL",
+   "leagueId": "NFL",
+   "score": 3,
+   "isWinner": false
+  },
+  "home": {
+   "team": "Baltimore Ravens",
+   "teamId": "BAL",
+   "league": "NFL",
+   "leagueId": "NFL",
+   "score": 47,
+   "isWinner": true
+  },
+  "sourceName": "nflverse",
+  "sourceDatasetRef": "https://github.com/nflverse/nflverse-data/releases/download/schedules/games.csv#game_id=2018_01_BUF_BAL"
+ }
+]

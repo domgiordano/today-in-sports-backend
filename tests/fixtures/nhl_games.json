@@ -1,0 +1,82 @@
+[
+ {
+  "sport": "nhl",
+  "gameId": 1951030214,
+  "gameDate": "1952-04-15",
+  "season": 19511952,
+  "gameType": 3,
+  "status": "OFF",
+  "seriesDescription": "Stanley Cup Final",
+  "seriesRound": 2,
+  "seriesAbbrev": "SCF",
+  "seriesGameNumber": 4,
+  "neededToWin": 4,
+  "topSeed": "MTL",
+  "topSeedWins": 0,
+  "bottomSeed": "DET",
+  "bottomSeedWins": 4,
+  "periodType": "REG",
+  "periods": 3,
+  "venue": "Detroit Olympia",
+  "away": {
+   "team": "Montr\u00e9al Canadiens",
+   "teamId": "MTL",
+   "league": "NHL",
+   "leagueId": "NHL",
+   "score": 0,
+   "shots": null,
+   "isWinner": false
+  },
+  "home": {
+   "team": "Detroit Red Wings",
+   "teamId": "DET",
+   "league": "NHL",
+   "leagueId": "NHL",
+   "score": 3,
+   "shots": null,
+   "isWinner": true
+  },
+  "sourceName": "nhl-api",
+  "sourceDatasetRef": "https://api-web.nhle.com/v1/schedule/1952-04-12#game=1951030214"
+ },
+ {
+  "sport": "nhl",
+  "gameId": 1954030217,
+  "gameDate": "1955-04-14",
+  "season": 19541955,
+  "gameType": 3,
+  "status": "OFF",
+  "seriesDescription": "Stanley Cup Final",
+  "seriesRound": 2,
+  "seriesAbbrev": "SCF",
+  "seriesGameNumber": 7,
+  "neededToWin": 4,
+  "topSeed": "DET",
+  "topSeedWins": 4,
+  "bottomSeed": "MTL",
+  "bottomSeedWins": 3,
+  "periodType": "REG",
+  "periods": 3,
+  "venue": "Detroit Olympia",
+  "away": {
+   "team": "Montr\u00e9al Canadiens",
+   "teamId": "MTL",
+   "league": "NHL",
+   "leagueId": "NHL",
+   "score": 1,
+   "shots": null,
+   "isWinner": false
+  },
+  "home": {
+   "team": "Detroit Red Wings",
+   "teamId": "DET",
+   "league": "NHL",
+   "leagueId": "NHL",
+   "score": 3,
+   "shots": null,
+   "isWinner": true
+  },
+  "sourceName": "nhl-api",
+  "sourceDatasetRef": "https://api-web.nhle.com/v1/schedule/1955-04-13#game=1954030217"
+ }
+]
