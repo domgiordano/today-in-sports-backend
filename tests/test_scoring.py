@@ -316,3 +316,44 @@ class TestMapCredit:
         q = {"type": "map", "tier": 3, "answer": self.MONZA}
         assert scoring.grade(q, self.MONZA, 5.0)["correct"] is True
         assert scoring.grade(q, {"lat": 40.7, "lng": -74.0}, 5.0)["points"] == 0
+
+
+class TestMultiCredit:
+    """
+    Pick four of eight. The arithmetic exists to close off one strategy:
+    selecting everything.
+    """
+
+    ANSWER = ["a", "b", "c", "d"]
+
+    def test_all_four_right_is_full_credit(self):
+        assert scoring.multi_credit(self.ANSWER, ["a", "b", "c", "d"]) == 1.0
+
+    def test_picking_everything_earns_nothing(self):
+        """
+        Four hits and four misses. Rewarding hits alone would make this a
+        perfect score and the format a button press.
+        """
+        everything = ["a", "b", "c", "d", "e", "f", "g", "h"]
+        assert scoring.multi_credit(self.ANSWER, everything) == 0.0
+
+    def test_a_partial_answer_still_scores(self):
+        # Three right, one wrong: (3 - 1) / 4.
+        assert scoring.multi_credit(self.ANSWER, ["a", "b", "c", "e"]) == 0.5
+
+    def test_more_wrong_than_right_is_floored_at_zero(self):
+        assert scoring.multi_credit(self.ANSWER, ["a", "e", "f", "g"]) == 0.0
+
+    def test_picking_nothing_earns_nothing(self):
+        assert scoring.multi_credit(self.ANSWER, []) == 0.0
+
+    def test_a_cautious_correct_answer_beats_a_reckless_one(self):
+        careful = scoring.multi_credit(self.ANSWER, ["a", "b"])
+        reckless = scoring.multi_credit(self.ANSWER, ["a", "b", "e", "f"])
+        assert careful > reckless
+
+    def test_only_a_complete_answer_counts_as_correct(self):
+        q = {"type": "multi", "tier": 4, "answer": self.ANSWER}
+        assert scoring.grade(q, ["a", "b", "c", "d"], 5.0)["correct"] is True
+        assert scoring.grade(q, ["a", "b", "c"], 5.0)["correct"] is False
+        assert scoring.grade(q, ["a", "b", "c"], 5.0)["points"] > 0

@@ -75,9 +75,25 @@ def _base(game, reason, score, title, facts):
         "mmdd": f"{m}-{d}",
         "title": title,
         "facts": facts,
+        # Carried so a lineup question can ask who actually started. Retrosheet
+        # records starters, not appearances, which is exactly the right list to
+        # ask about - it is a decision somebody made before the game, not an
+        # accident of how the game unfolded.
+        "lineups": _lineup_names(game),
         "sourceName": game["sourceName"],
         "sourceDatasetRef": game["sourceDatasetRef"],
     }
+
+
+def _lineup_names(game):
+    """Both starting nines, as names, or an empty list when unrecorded."""
+    players = game.get("players") or {}
+    out = []
+    for entry in players.get("lineups") or []:
+        name = (entry or {}).get("name")
+        if name:
+            out.append(name)
+    return out
 
 
 def detect_no_hitter(game):

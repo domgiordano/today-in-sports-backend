@@ -26,6 +26,7 @@ from decimal import Decimal
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from lambdas.common import constants                              # noqa: E402
+from lambdas.common.templates import lineup_templates as lineup_tpl  # noqa: E402
 from lambdas.common.templates import map_templates as map_tpl     # noqa: E402
 from lambdas.common.templates import mlb_templates as mlb_tpl     # noqa: E402
 from lambdas.common.templates import ordering_templates as ord_tpl  # noqa: E402
@@ -125,6 +126,10 @@ def build_questions(events, circuits=None):
     # a place we guessed.
     if circuits:
         questions.extend(map_tpl.generate(events, map_tpl.build_context(circuits)))
+
+    # Lineup questions need the starting nines the events now carry, and a
+    # decoy pool built from the same corpus so no decoy ever really played.
+    questions.extend(lineup_tpl.generate(events))
     return questions
 
 
@@ -155,7 +160,8 @@ def main():
         # ordering question's items are a permutation of its answer, and
         # running everything through it would wave those questions straight
         # past the checks written for them.
-        checker = (map_tpl.validate if q["type"] == "map"
+        checker = (lineup_tpl.validate if q["type"] == "multi"
+                   else map_tpl.validate if q["type"] == "map"
                    else ord_tpl.validate if q["type"] in ("ordering", "clue")
                    else mlb_tpl.validate)
         problems = checker(q)

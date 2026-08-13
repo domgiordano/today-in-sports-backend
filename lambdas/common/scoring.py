@@ -152,6 +152,32 @@ def map_credit(answer, submitted):
     return max(0.0, 1.0 - (distance - MAP_FULL_CREDIT_KM) / span)
 
 
+def multi_credit(answer, submitted):
+    """
+    Fraction earned by a pick-four-of-eight, with wrong picks subtracting.
+
+    Rewarding hits alone would make selecting all eight a perfect score, which
+    turns the format into a button press. Each wrong pick cancels a right one,
+    so a shotgun answer earns nothing and a genuinely partial answer still
+    scores.
+
+    Selecting more than the question asked for is not a smarter strategy - it
+    is the strategy this arithmetic exists to close off.
+    """
+    if not isinstance(answer, (list, tuple)) or not answer:
+        return 0.0
+    if not isinstance(submitted, (list, tuple)):
+        return 0.0
+
+    correct = {str(a) for a in answer}
+    picked = {str(s) for s in submitted}
+
+    hits = len(picked & correct)
+    misses = len(picked - correct)
+
+    return max(0.0, (hits - misses) / len(correct))
+
+
 def ordering_credit(answer, submitted):
     """
     Fraction of correctly ordered pairs — Kendall tau, normalised to 0..1.
@@ -214,7 +240,10 @@ def grade(question, submitted, seconds, hint_used=False, clues_taken=0):
     base = base_value(question.get("tier"))
     qtype = question.get("type")
 
-    if qtype == "map":
+    if qtype == "multi":
+        credit = multi_credit(question.get("answer"), submitted)
+        correct = credit >= 1.0
+    elif qtype == "map":
         credit = map_credit(question.get("answer"), submitted)
         correct = credit >= 1.0
     elif qtype == "ordering":

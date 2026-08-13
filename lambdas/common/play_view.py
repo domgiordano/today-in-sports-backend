@@ -67,6 +67,7 @@ def public_question(question, index, total, with_options=False,
         # Ordering items are shuffled at generation time and stored that way,
         # so the order here carries no signal about the answer.
         "items": list(question.get("items") or []) if qtype == "ordering" else None,
+        "chooseCount": question.get("chooseCount") if qtype == "multi" else None,
         # A map question's answer IS a coordinate, so nothing about the venue
         # can travel with the question - not the name, not the country, not a
         # bounding box. All of it is revealed only once the answer is locked in.
@@ -81,7 +82,14 @@ def public_question(question, index, total, with_options=False,
         "prompt": question["prompt"],
         "sport": question["sport"],
         "league": question.get("league"),
-        "options": options_for(question) if show_options else None,
+        # Two different reasons to send options, and they must resolve in one
+        # place: a multiple-choice question releases them only as a paid hint,
+        # while a pick-four ships all eight up front because half are decoys
+        # and nothing marks which. A second "options" key here would silently
+        # win over the first and blank one of the two.
+        "options": (list(question.get("options") or []) if qtype == "multi"
+                    else options_for(question) if show_options
+                    else None),
         "tolerance": (question.get("tolerance")
                       if question.get("type") == "numeric" else None),
     }
