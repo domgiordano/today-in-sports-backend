@@ -55,7 +55,77 @@ SPORT_SECTIONS = ("sport", "football")
 ROUTINE = re.compile(
     r"\b(preview|live|as it happened|talking points|in pictures|gallery|"
     r"quiz|clockwatch|minute-by-minute|team news|predictions?|"
-    r"what to watch|the fiver|rumour|gossip)\b", re.I)
+    r"what to watch|the fiver|rumours?|gossip|squad sheets?|"
+    r"how they stand|in numbers|talking horses|racing tips?|sums? up)\b", re.I)
+
+# Not an event, whatever the headline says.
+#
+# A trailing "- report" marks a story the paper is not standing behind, and
+# "Mourinho has signed pre-contract agreement with Manchester United - report"
+# scored highest of anything on a sampled day while not having happened. Video
+# and podcast items are a format, not an occurrence.
+#
+# Kept out of the ROUTINE pattern because these are anchored to punctuation and
+# line endings rather than word boundaries, and \b cannot precede a dash - which
+# is exactly why the first attempt at this matched nothing at all.
+UNCONFIRMED = re.compile(
+    r"[-–—]\s*(report|reports)\s*$|\bvideo\b|\bpodcast\b|paper review", re.I)
+
+
+# Somebody talking about a thing that has not happened yet.
+#
+# The routine filter above catches formats - a preview, a live blog. This
+# catches the far larger category the archive is actually full of: a manager
+# saying something before a game. Of eighteen headlines sampled from two March
+# days, three were events and the rest were "Gatland prepares Wales to run at
+# Ireland", "Johnson warns England they must seize high ground", "Davies seeks
+# FA Cup glory". None of those is a thing that happened on a date.
+QUOTED = re.compile(
+    r"\b(says?|said|insists?|warns?|seeks?|prepares?|hopes?|urges?|backs?|"
+    r"admits?|denies|claims?|believes?|expects?|calls? for|wants?|vows?|"
+    r"targets?|eyes?|braced|relish(es)?|faces?|must|should|could|will)\b",
+    re.I)
+
+# The event classes a date-anchored quiz can actually use: a thing that
+# happened to somebody, on a day. Drawn from what the archive yields rather
+# than invented - transfers, sackings, retirements, bans and injuries are the
+# off-season's entire supply of news.
+NEWSWORTHY = (
+    # Both voices and both vocabularies: a British paper writes "Rovers sack
+    # manager", an American one "Nets fire coach", and the first version of
+    # this had only the past participle "sacked" - so an active-voice sacking,
+    # which is how most of them are written, scored zero.
+    (re.compile(r"\b(sacks?|sacked|fires?|fired|dismissed|resigns?|"
+                r"steps? down|departs?|"
+                r"appointed|named (as )?(the )?(new )?(head )?(coach|manager)|"
+                r"takes? charge)\b", re.I), 30),
+    (re.compile(r"\b(retires?|retirement|quits?|calls? time|"
+                r"announces? his retirement)\b", re.I), 30),
+    (re.compile(r"\b(banned|ban|charged|suspended|doping|drug test|"
+                r"investigation|arrested|guilty|cleared of|fined|"
+                r"stripped of|scandal|charges?|allegations?|inquiry)\b", re.I), 28),
+    (re.compile(r"\b(signs?|joins?|completes? (a )?(move|transfer)|"
+                r"transfer|sold to|agrees? (a )?deal|sealed? a move)\b",
+                re.I), 22),
+    (re.compile(r"\b(record|first ever|fastest|youngest|oldest|"
+                r"breaks? the|becomes? the first)\b", re.I), 20),
+    (re.compile(r"\b(injured|injury|ruled out|out for the season|"
+                r"surgery|torn|fractured)\b", re.I), 16),
+    (re.compile(r"\b(wins?|won|beat|beats|defeats?|clinch(es|ed)?|"
+                r"champions?|title)\b", re.I), 8),
+)
+
+# The bar to reach the queue at all.
+#
+# Deliberately low, and set to the weakest event class rather than to something
+# selective. This score sorts a queue a person reads top-down and abandons when
+# they have had enough - so a long list ranked well beats a short one that
+# quietly dropped the best story. Tuned the other way, the first version cut 87
+# articles to 5 and threw away "No charges over Ashley Cole air rifle incident
+# at Chelsea", which is exactly the kind of thing this source exists for.
+#
+# Over-filtering loses events silently. Under-filtering only costs scrolling.
+MIN_CANDIDATE_SCORE = 8
 
 
 class SourceError(Exception):
@@ -107,6 +177,28 @@ def _get(params, cache_dir=None):
 def is_routine(headline):
     """Coverage that is published every week is not an event."""
     return bool(ROUTINE.search(headline or ""))
+
+
+def candidate_score(headline, summary=""):
+    """
+    How likely this article is to describe a thing that happened.
+
+    The archive is mostly people talking about sport rather than sport
+    happening, and a queue somebody has to work by hand cannot afford that
+    ratio. Scoring lets the crawl stay broad while the queue stays short.
+
+    Returns 0 for anything quoting somebody ahead of an event, and otherwise
+    the strongest event class the text matches - strongest rather than summed,
+    so a sacking mentioned alongside a transfer is scored as one sacking and
+    not as unusually important.
+    """
+    text = f"{headline or ''} {summary or ''}"
+    if not text.strip():
+        return 0
+    if QUOTED.search(headline or "") or UNCONFIRMED.search(headline or ""):
+        return 0
+    return max((points for pattern, points in NEWSWORTHY
+                if pattern.search(text)), default=0)
 
 
 def resolve_event_date(published, text):
@@ -202,7 +294,12 @@ def fetch_day(when, cache_dir=None, page_size=50):
         body = re.sub(r"<[^>]+>", " ", fields.get("body") or "")[:2000]
         event_date = resolve_event_date(published, f"{headline} {summary} {body}")
 
+        score = candidate_score(headline, summary)
+        if score < MIN_CANDIDATE_SCORE:
+            continue
+
         out.append({
+            "candidateScore": score,
             "headline": headline.strip(),
             "summary": summary,
             "publishedAt": published[:10],

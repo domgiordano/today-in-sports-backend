@@ -93,3 +93,60 @@ def test_dates_before_coverage_return_nothing_rather_than_failing():
 
 def test_the_earliest_year_is_stated():
     assert g.EARLIEST_YEAR == 1999
+
+
+# ------------------------------------------------------- ranking the queue
+
+class TestCandidateScore:
+    """
+    The archive is mostly people talking about sport rather than sport
+    happening. Of eighteen headlines sampled from two March days, three were
+    events; the rest were managers saying things before games. A queue somebody
+    works by hand cannot afford that ratio, so the crawl stays broad and the
+    score sorts what reaches a person.
+    """
+
+    def test_a_sacking_outranks_a_result(self):
+        assert (g.candidate_score("Rovers sack manager after cup exit")
+                > g.candidate_score("Rovers beat United 3-1"))
+
+    def test_a_scandal_is_ranked_highly(self):
+        # The first version of this scored it zero and dropped it, which is
+        # exactly the kind of story the source exists for.
+        assert g.candidate_score(
+            "No charges over Ashley Cole air rifle incident at Chelsea") > 0
+
+    def test_somebody_talking_before_a_game_scores_nothing(self):
+        for headline in ("Gatland prepares Wales to run at Ireland",
+                         "Johnson warns England they must seize high ground",
+                         "Davies seeks FA Cup glory at Bolton"):
+            assert g.candidate_score(headline) == 0, headline
+
+    def test_an_unconfirmed_report_scores_nothing(self):
+        """
+        A trailing "- report" marks a story the paper is not standing behind.
+        This one scored highest of anything on a sampled day and had not
+        happened.
+        """
+        assert g.candidate_score(
+            "Mourinho has signed pre-contract agreement with United – report") == 0
+
+    def test_a_video_item_scores_nothing(self):
+        assert g.candidate_score("European paper review – video") == 0
+
+    def test_the_dash_patterns_are_not_word_anchored(self):
+        # \b cannot precede a dash, which is why the first attempt at the
+        # report filter matched nothing at all.
+        assert g.UNCONFIRMED.search("Something happened - report")
+        assert g.UNCONFIRMED.search("Something happened – report")
+
+    def test_the_strongest_class_wins_rather_than_the_sum(self):
+        # A sacking mentioned alongside a transfer is one sacking, not an
+        # unusually important event.
+        both = g.candidate_score("Rovers sack manager and complete transfer")
+        assert both == g.candidate_score("Rovers sack manager")
+
+    def test_a_low_scoring_result_still_reaches_the_queue(self):
+        # Over-filtering loses events silently; under-filtering costs
+        # scrolling. The bar sits at the weakest event class on purpose.
+        assert g.candidate_score("Bangladesh win by two wickets") >= g.MIN_CANDIDATE_SCORE
