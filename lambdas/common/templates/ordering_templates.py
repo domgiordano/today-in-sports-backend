@@ -339,6 +339,25 @@ def build_context(events):
     return {}
 
 
+# Narrative candidates are somebody else's sentences, not facts this corpus
+# derived. Every other template is keyed on a sport or a reason code and so
+# never sees them; ordering is the one built over every event regardless of
+# sport, which is exactly what let a Guardian headline become a drag-to-order
+# item shown to a player verbatim - no citation, no reviewer, and flatly
+# against the rule that a model may only restate a sentence a human has read
+# beside the question it became.
+#
+# The exclusion is by sport rather than by status on purpose: a candidate a
+# human has already written a question from is still the newspaper's wording,
+# so it never becomes raw material for an automatic template either.
+NARRATIVE_SPORT = "news"
+
+
+def _is_derivable(event):
+    """Is this an event this corpus established, rather than one it read about?"""
+    return event.get("sport") != NARRATIVE_SPORT
+
+
 def generate(events, ctx=None):
     """
     Ordering questions per calendar date, clue ladders per event.
@@ -348,6 +367,8 @@ def generate(events, ctx=None):
     """
     ctx = ctx or {}
     out = []
+
+    events = [e for e in events if _is_derivable(e)]
 
     by_date = {}
     for e in events:

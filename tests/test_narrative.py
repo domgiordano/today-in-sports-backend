@@ -205,3 +205,68 @@ def test_question_id_is_stable_for_the_same_wording(monkeypatch):
     a = nd.question_from_candidate(candidate(), mc_fields(), "dom@example.com")
     b = nd.question_from_candidate(candidate(), mc_fields(), "dom@example.com")
     assert a["questionId"] == b["questionId"]
+
+
+# ------------------------------------------- candidates are not raw material
+
+def news_event(year, headline):
+    return {
+        "sport": "news", "league": "Football", "reason": "narrative_event",
+        "gameId": f"news-{year}", "gameDate": f"{year}-08-14",
+        "year": year, "mmdd": "08-14",
+        "title": headline, "facts": {"headline": headline},
+        "sourceName": "The Guardian",
+        "sourceDatasetRef": "https://www.theguardian.com/x",
+        "status": "needs_review",
+    }
+
+
+def test_narrative_candidates_never_become_ordering_questions():
+    """
+    Ordering is the one template built over every event regardless of sport,
+    which let a Guardian headline become a drag-to-order item shown to a player
+    verbatim — no citation, no reviewer, and against the rule that a sentence
+    is only ever restated beside the question a human wrote from it.
+    """
+    from lambdas.common.templates import ordering_templates as ord_tpl
+
+    events = [
+        news_event(2001, "Rovers name teenager as first-choice keeper"),
+        news_event(2005, "Manager sacked after cup exit"),
+        news_event(2011, "Striker signs for a record fee"),
+        news_event(2016, "Captain retires from international duty"),
+        news_event(2020, "Season suspended after outbreak"),
+    ]
+    assert ord_tpl.generate(events, {}) == []
+
+
+def test_a_written_candidate_is_still_not_raw_material():
+    # The wording stays the newspaper's after a human has used it, so the
+    # exclusion is by sport rather than by where the candidate is in its life.
+    from lambdas.common.templates import ordering_templates as ord_tpl
+
+    events = [news_event(2000 + i * 5, f"Something happened number {i}")
+              for i in range(5)]
+    for e in events:
+        e["status"] = "written"
+    assert ord_tpl.generate(events, {}) == []
+
+
+def test_derivable_events_still_produce_ordering_questions():
+    # The exclusion must not quietly take the real corpus with it.
+    from lambdas.common.templates import ordering_templates as ord_tpl
+
+    events = [{
+        "sport": "mlb", "league": "AL", "reason": "no_hitter",
+        "gameId": f"g{y}", "gameDate": f"{y}-08-14", "year": y, "mmdd": "08-14",
+        "title": f"A pitcher no-hit the opposition, game {y % 100}",
+        "facts": {}, "sourceName": "Retrosheet", "sourceDatasetRef": "r",
+    } for y in (1965, 1972, 1984, 1999)]
+    assert len(ord_tpl.generate(events, {})) == 1
+
+
+def test_the_two_narrative_sport_constants_agree():
+    # Two modules name the same sport code. If they drift, the ordering
+    # exclusion silently stops matching and the leak comes back.
+    from lambdas.common.templates import ordering_templates as ord_tpl
+    assert ord_tpl.NARRATIVE_SPORT == nd.NARRATIVE_SPORT
