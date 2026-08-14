@@ -49,6 +49,10 @@ def _base(sport, league, game, reason, score, title, facts):
         "mmdd": f"{m}-{d}",
         "title": title,
         "facts": facts,
+        # Retrosheet's park code, for map questions. Same reason as the
+        # game-level detectors carry it: the code is a fact from the game log,
+        # and only the corpus build has the index that turns it into a place.
+        "park": game.get("park") or None,
         "sourceName": game["sourceName"],
         "sourceDatasetRef": game["sourceDatasetRef"],
     }

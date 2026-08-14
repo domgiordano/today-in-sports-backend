@@ -129,6 +129,7 @@ class MilestoneAccumulator:
                 "player": pitcher["name"], "playerId": pitcher["id"],
                 "careerWins": total, "team": winner_team, "opponent": loser,
             },
+            "park": game.get("park"),
             "sourceName": game["sourceName"],
             "sourceDatasetRef": game["sourceDatasetRef"],
         }
@@ -191,9 +192,17 @@ class MilestoneAccumulator:
 
 
 def _slim(game):
-    """Only what an event needs for provenance and titling."""
+    """
+    Only what an event needs for provenance, titling and placing.
+
+    The park code is one short string per tracked player, which is nothing
+    against the memory this function exists to save — and leaving it out
+    silently cost every milestone its map question, because the event was
+    built from the slimmed game rather than the real one.
+    """
     return {
         "gameId": game["gameId"], "gameDate": game["gameDate"],
+        "park": game.get("park"),
         "away": {"team": game["away"]["team"], "league": game["away"].get("league"),
                  "leagueId": game["away"].get("leagueId")},
         "home": {"team": game["home"]["team"]},
@@ -212,6 +221,7 @@ def _player_event(game, reason, score, title, facts):
         "gameId": game["gameId"], "gameDate": game["gameDate"],
         "year": int(y), "mmdd": f"{m}-{d}",
         "title": title, "facts": facts,
+        "park": game.get("park"),
         "sourceName": game["sourceName"],
         "sourceDatasetRef": game["sourceDatasetRef"],
     }

@@ -80,6 +80,11 @@ def _base(game, reason, score, title, facts):
         # ask about - it is a decision somebody made before the game, not an
         # accident of how the game unfolded.
         "lineups": _lineup_names(game),
+        # The Retrosheet park code, for map questions. Carried rather than
+        # resolved here: the code is a fact from the game log, and turning it
+        # into a coordinate needs a geocoded index that only the corpus build
+        # has. Storing the code keeps the event true to its source.
+        "park": game.get("park") or None,
         "sourceName": game["sourceName"],
         "sourceDatasetRef": game["sourceDatasetRef"],
     }

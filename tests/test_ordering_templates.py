@@ -206,3 +206,34 @@ def test_every_ladder_has_at_least_two_identifying_clues():
             identifying = [c for c in q["clues"]
                            if not c.startswith(tpl.GENERIC_PREFIXES)]
             assert len(identifying) >= 2, q["clues"]
+
+
+def test_a_date_mixing_integer_and_string_game_ids_does_not_crash():
+    """
+    Game ids are not one type across sources: Retrosheet and f1db give them as
+    text, the NBA and NHL feeds as integers. The tie-break that picks one event
+    per year compared them raw, so the first calendar date holding both raised
+    TypeError and took the whole corpus load down with it.
+    """
+    from lambdas.common.templates import ordering_templates as tpl
+
+    def ev(game_id, year, sport):
+        return {
+            "gameId": game_id, "year": year, "mmdd": "06-15",
+            "gameDate": f"{year}-06-15", "sport": sport, "league": "L",
+            "reason": "x", "title": f"Something happened in {sport}",
+            "sourceName": "s", "sourceDatasetRef": "r", "facts": {},
+        }
+
+    events = [
+        ev("BRO193806150", 1938, "mlb"),
+        ev(20120613, 2012, "nhl"),
+        ev("f1-1994-06", 1994, "f1"),
+        ev(41700307, 2017, "nba"),
+        ev(19850615, 1985, "nhl"),
+    ]
+
+    # The assertion is that this returns rather than raising; the question it
+    # produces is checked by the other tests here.
+    out = tpl.chronological(events)
+    assert isinstance(out, list)

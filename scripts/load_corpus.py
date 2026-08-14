@@ -76,7 +76,7 @@ def status_for(question_id, decided):
     return decided.get(question_id, "draft")
 
 
-def build_questions(events, circuits=None, accolades=None):
+def build_questions(events, circuits=None, accolades=None, parks=None):
     """
     Route each event to the templates for its own sport.
 
@@ -122,11 +122,12 @@ def build_questions(events, circuits=None, accolades=None):
     # day, which is the one thing every source has in common.
     questions.extend(ord_tpl.generate(events, {'accolades': accolades or {}}))
 
-    # Map questions need circuit coordinates, which only the f1db dump has. No
-    # circuits loaded means no map questions, rather than questions pointing at
-    # a place we guessed.
-    if circuits:
-        questions.extend(map_tpl.generate(events, map_tpl.build_context(circuits)))
+    # Map questions need coordinates: circuits from the f1db dump, ballparks
+    # from the geocoded index. Neither loaded means no map questions, rather
+    # than questions pointing at a place we guessed.
+    if circuits or parks:
+        questions.extend(map_tpl.generate(
+            events, map_tpl.build_context(circuits, parks)))
 
     # Lineup questions need the starting nines the events now carry, and a
     # decoy pool built from the same corpus so no decoy ever really played.
@@ -145,6 +146,7 @@ def main():
     ap.add_argument("--limit", type=int)
     ap.add_argument("--f1-cache", help="extracted f1db dump, for map questions")
     ap.add_argument("--accolades", help="career award counts, for richer clues")
+    ap.add_argument("--parks", help="geocoded park index, for map questions")
     args = ap.parse_args()
 
     events = load_events(args.events)
@@ -163,7 +165,13 @@ def main():
             accolades = json.load(f)
         print(f"accolades loaded for {len(accolades)} players")
 
-    questions = build_questions(events, circuits, accolades)
+    parks = {}
+    if args.parks:
+        with open(args.parks) as f:
+            parks = json.load(f)
+        print(f"defunct parks with coordinates: {len(parks)}")
+
+    questions = build_questions(events, circuits, accolades, parks)
     valid, rejected = [], 0
     reasons = collections.Counter()
     for q in questions:

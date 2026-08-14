@@ -75,7 +75,15 @@ def chronological(events, ctx=None):
     by_year = {}
     for e in events:
         # First event of each year wins, deterministically.
-        if e["year"] not in by_year or e["gameId"] < by_year[e["year"]]["gameId"]:
+        #
+        # Compared as strings because game ids are not one type across sources:
+        # Retrosheet and f1db give them as text, the NBA and NHL feeds as
+        # integers. Comparing them raw raised TypeError the moment a calendar
+        # date held both, which is most dates - the tie-break only exists to
+        # make the choice repeatable, so how it orders matters far less than
+        # that it never crashes.
+        if (e["year"] not in by_year
+                or str(e["gameId"]) < str(by_year[e["year"]]["gameId"])):
             by_year[e["year"]] = e
 
     picked = sorted(by_year.values(), key=lambda e: e["year"])
