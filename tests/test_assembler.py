@@ -232,3 +232,75 @@ class TestFormatMix:
         bank = self._bank(["mc", "numeric", "ordering", "clue", "mc"])
         item = asm.assemble("2026-08-13", bank).to_item()
         assert item["formatMix"]["mc"] == 2
+
+
+class TestLeapDay:
+    """
+    February 29 has occurred a quarter as often as any other date, so the
+    corpus holds three approved questions for it against a five-question quiz —
+    and publishing refuses a short quiz. Without a fallback, 2028-02-29 would
+    have had no quiz at all.
+    """
+
+    def _q(self, i, mmdd, tier):
+        return {"questionId": f"q{i}", "status": "approved", "mmdd": mmdd,
+                "type": ["mc", "numeric", "clue", "map", "ordering"][i % 5],
+                "tier": tier, "sport": ["mlb", "nhl", "f1", "nba", "soccer"][i % 5],
+                "prompt": f"prompt {i}", "answer": "a"}
+
+    def test_a_leap_day_borrows_from_february_28(self):
+        from lambdas.common.assembler import assemble
+        questions = ([self._q(i, "02-29", (i % 5) + 1) for i in range(3)]
+                     + [self._q(10 + i, "02-28", (i % 5) + 1) for i in range(10)])
+        result = assemble("2028-02-29", questions)
+        assert result.complete
+        assert "leap-day-borrow" in result.relaxed
+        assert any("february 28" in w for w in result.warnings)
+
+    def test_the_borrowing_is_visible_rather_than_silent(self):
+        # The schedule panel has to be able to show that a day is not built
+        # from its own date, or it presents the 28th's questions as the 29th's.
+        from lambdas.common.assembler import assemble
+        questions = ([self._q(i, "02-29", (i % 5) + 1) for i in range(3)]
+                     + [self._q(10 + i, "02-28", (i % 5) + 1) for i in range(10)])
+        assert assemble("2028-02-29", questions).relaxed
+
+    def test_a_leap_day_with_enough_of_its_own_does_not_borrow(self):
+        from lambdas.common.assembler import assemble
+        questions = ([self._q(i, "02-29", (i % 5) + 1) for i in range(8)]
+                     + [self._q(50 + i, "02-28", (i % 5) + 1) for i in range(5)])
+        result = assemble("2028-02-29", questions)
+        assert "leap-day-borrow" not in result.relaxed
+        assert all(q["mmdd"] == "02-29" for q in result.questions)
+
+    def test_no_other_date_borrows(self):
+        # A thin July date stays thin and gets flagged; only the leap day, which
+        # cannot fill itself by construction, is allowed to reach next door.
+        from lambdas.common.assembler import assemble
+        questions = ([self._q(i, "07-04", (i % 5) + 1) for i in range(2)]
+                     + [self._q(20 + i, "07-03", (i % 5) + 1) for i in range(10)])
+        result = assemble("2027-07-04", questions)
+        assert not result.complete
+        assert "leap-day-borrow" not in result.relaxed
+
+    def test_the_days_own_questions_are_used_before_borrowed_ones(self):
+        """
+        The first run of this filled all five slots from February 28 while the
+        three real February 29 questions sat unused — the borrowed pool was
+        simply larger and won on every other tiebreak. A borrowed question is a
+        fallback, not a peer.
+        """
+        from lambdas.common.assembler import assemble
+        questions = ([self._q(i, "02-29", (i % 5) + 1) for i in range(3)]
+                     + [self._q(10 + i, "02-28", (i % 5) + 1) for i in range(20)])
+        result = assemble("2028-02-29", questions)
+        own = [q for q in result.questions if q["mmdd"] == "02-29"]
+        assert len(own) == 3, "every real leap-day question should be used"
+
+    def test_the_borrowed_marker_never_reaches_the_stored_quiz(self):
+        from lambdas.common.assembler import assemble
+        questions = ([self._q(i, "02-29", (i % 5) + 1) for i in range(3)]
+                     + [self._q(10 + i, "02-28", (i % 5) + 1) for i in range(10)])
+        result = assemble("2028-02-29", questions)
+        assert all("_borrowed" not in q for q in questions)
+        assert "questionIds" in result.to_item()

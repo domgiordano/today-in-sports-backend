@@ -98,6 +98,22 @@ def _type_cap(pool):
     return max(MAX_PER_TYPE, -(-QUIZ_LENGTH // distinct))
 
 
+# February 29 is the one calendar date the corpus cannot fill on its own.
+#
+# It has occurred a quarter as often as any other day, so it holds three
+# approved questions against a five-question quiz - and `set_status` refuses to
+# publish a short one, which means 2028-02-29 would have had no quiz at all
+# rather than a thin one.
+#
+# It borrows from February 28, which is the closest a date-anchored quiz can
+# honestly get: those questions are still anchored to a real day next to this
+# one, and the alternative is a day with nothing on it. The borrowing is
+# recorded as a relaxed constraint so the schedule panel shows it rather than
+# quietly presenting the 28th's questions as the 29th's.
+LEAP_DAY = "02-29"
+LEAP_DAY_FALLBACK = "02-28"
+
+
 def _eligible(questions, mmdd, used_ids):
     return [q for q in questions
             if q.get("status") == "approved"
@@ -109,7 +125,13 @@ def _best(candidates, chosen_sports, chosen_types=None, prefer_new_sport=True):
     """
     Pick the strongest candidate, preferring an unrepresented sport and format.
 
-    Sport comes first because someone who does not follow a sport cannot answer
+    A question actually anchored to this date outranks everything else. Only
+    the leap day ever borrows, and on the first run it filled all five slots
+    from February 28 while the three real February 29 questions sat unused -
+    the borrowed pool was simply larger and won on every other tiebreak. A
+    borrowed question is a fallback, not a peer.
+
+    Sport comes next because someone who does not follow a sport cannot answer
     at all, whereas a repeated format is only dull. Ties break on notability
     where present, then on questionId so assembly is deterministic — the same
     bank and date must always produce the same quiz.
@@ -123,6 +145,7 @@ def _best(candidates, chosen_sports, chosen_types=None, prefer_new_sport=True):
         fresh_sport = q["sport"] not in chosen_sports
         fresh_type = chosen_types[q.get("type")] == 0
         return (
+            1 if q.get("_borrowed") else 0,
             0 if (prefer_new_sport and fresh_sport) else 1,
             0 if fresh_type else 1,
             -(q.get("notabilityScore") or 0),
@@ -146,6 +169,18 @@ def assemble(quiz_date, questions, used_ids=None, mix=None):
     pool = _eligible(questions, mmdd, used_ids)
     warnings = []
     relaxed = []
+
+    if mmdd == LEAP_DAY and len(pool) < QUIZ_LENGTH:
+        borrowed = _eligible(questions, LEAP_DAY_FALLBACK, used_ids)
+        if borrowed:
+            # Marked so `_best` treats them as a fallback rather than a peer;
+            # copied so the flag never reaches the stored question.
+            borrowed = [dict(q, _borrowed=True) for q in borrowed]
+            pool = pool + borrowed
+            relaxed.append("leap-day-borrow")
+            warnings.append(
+                f"february 29 has too few questions of its own; "
+                f"{len(borrowed)} borrowed from february 28")
 
     if not pool:
         return AssemblyResult(quiz_date, [], ["no approved questions for this date"], [])
