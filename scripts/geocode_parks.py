@@ -40,9 +40,11 @@ def main():
     geocode_cache_path = args.geocode_cache or f"{args.out}.geocode.json"
 
     parks = parks_source.load_parks(args.cache)
-    defunct = {k: p for k, p in parks.items() if parks_source.is_defunct(p)}
+    defunct = {k: p for k, p in parks.items()
+               if parks_source.is_defunct(p)
+               and parks_source.served_long_enough(p)}
     print(f"parks known       : {len(parks)}")
-    print(f"defunct           : {len(defunct)}")
+    print(f"defunct, 2+ seasons: {len(defunct)}")
 
     # Geocode distinct places, not parks. Five Polo Grounds share one city, and
     # asking five times for the same answer is five times the imposition on a

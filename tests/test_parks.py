@@ -73,11 +73,14 @@ TODAY_YEAR = date.today().year
 def test_only_defunct_geocoded_parks_reach_the_index():
     parks = {
         "NYC15": {"parkId": "NYC15", "name": "Ebbets Field", "aka": [],
-                  "city": "Brooklyn", "state": "NY", "end": date(1957, 9, 24)},
+                  "city": "Brooklyn", "state": "NY",
+                  "start": date(1913, 4, 9), "end": date(1957, 9, 24)},
         "BOS07": {"parkId": "BOS07", "name": "Fenway Park", "aka": [],
-                  "city": "Boston", "state": "MA", "end": None},
+                  "city": "Boston", "state": "MA",
+                  "start": date(1912, 4, 20), "end": None},
         "STL05": {"parkId": "STL05", "name": "Robison Field", "aka": [],
-                  "city": "St. Louis", "state": "MO", "end": date(1920, 6, 6)},
+                  "city": "St. Louis", "state": "MO",
+                  "start": date(1893, 4, 27), "end": date(1920, 6, 6)},
     }
     coords = {"Brooklyn, NY, USA": {"lat": 40.66, "lng": -73.94}}
     index = parks_source.build_index(parks, coords)
@@ -251,3 +254,49 @@ def test_every_map_template_key_is_a_reason_some_detector_emits():
 
     unmatched = set(tpl.TEMPLATES) - emitted
     assert not unmatched, f"map templates keyed on reasons nobody emits: {unmatched}"
+
+
+# ------------------------------------------------- how long it has to have run
+
+def test_a_one_season_pandemic_park_is_not_asked_about():
+    """
+    TD Ballpark in Dunedin was the Blue Jays' 2021 home. A player who reasons
+    "2021 Blue Jays, so Toronto" lands 2,000km away — exactly the distance that
+    scores zero. Punishing the correct inference is worse than asking nothing.
+    """
+    assert not parks_source.served_long_enough(
+        {"start": date(2021, 4, 8), "end": date(2021, 5, 16)})
+
+
+def test_an_1880s_one_off_ground_is_not_asked_about():
+    assert not parks_source.served_long_enough(
+        {"start": date(1884, 4, 30), "end": date(1884, 5, 31)})
+
+
+def test_a_long_serving_park_is():
+    # Ebbets Field, 1913-1957.
+    assert parks_source.served_long_enough(
+        {"start": date(1913, 4, 9), "end": date(1957, 9, 24)})
+    # Turner Field, 1997-2016 — recent, but a real home for two decades.
+    assert parks_source.served_long_enough(
+        {"start": date(1997, 4, 4), "end": date(2016, 10, 2)})
+
+
+def test_a_park_with_no_start_date_cannot_be_judged():
+    # Same standard as a park with no coordinate: excluded rather than guessed.
+    assert not parks_source.served_long_enough(
+        {"start": None, "end": date(1957, 9, 24)})
+
+
+def test_the_index_applies_the_service_floor():
+    parks = {
+        "NYC15": {"parkId": "NYC15", "name": "Ebbets Field", "aka": [],
+                  "city": "Brooklyn", "state": "NY",
+                  "start": date(1913, 4, 9), "end": date(1957, 9, 24)},
+        "DUN01": {"parkId": "DUN01", "name": "TD Ballpark", "aka": [],
+                  "city": "Dunedin", "state": "FL",
+                  "start": date(2021, 4, 8), "end": date(2021, 5, 16)},
+    }
+    coords = {"Brooklyn, NY, USA": {"lat": 40.66, "lng": -73.94},
+              "Dunedin, FL, USA": {"lat": 28.01, "lng": -82.79}}
+    assert set(parks_source.build_index(parks, coords)) == {"NYC15"}

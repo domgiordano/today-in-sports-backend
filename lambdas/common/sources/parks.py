@@ -110,16 +110,41 @@ def load_parks(cache_dir):
     return parks
 
 
+# A park has to have been somebody's home for a while before "where did they
+# play" is a fact rather than a trick.
+#
+# Two seasons, and the number comes from a question this produced: Dexter
+# Fowler's last game, at TD Ballpark in Dunedin, Florida - the Blue Jays' 2021
+# pandemic home. A player who correctly reasons "2021 Blue Jays, so Toronto"
+# lands 2,000km away, which is exactly the distance that scores zero. Punishing
+# the right inference is worse than asking nothing, and the same applies to the
+# 1880s grounds that hosted a handful of games and vanished.
+MIN_SERVICE_YEARS = 2.0
+
+
 def is_defunct(park):
     """
     Has this park closed?
 
-    The whole rule for whether a park is worth asking about. An open park is
+    Half the rule for whether a park is worth asking about. An open park is
     answerable from the club's current city, which makes it a question about
     the present rather than about the day it is anchored to.
     """
     end = park.get("end")
     return bool(end and end <= TODAY)
+
+
+def served_long_enough(park):
+    """
+    Was this park a home rather than a stopover?
+
+    The other half of the rule. A park with no start date cannot be judged, so
+    it is excluded — the same standard as a park with no coordinate.
+    """
+    start, end = park.get("start"), park.get("end")
+    if not (start and end):
+        return False
+    return (end - start).days / 365.25 >= MIN_SERVICE_YEARS
 
 
 # ---------------------------------------------------------------- geocoding
@@ -220,13 +245,13 @@ def build_index(parks, coords):
     """
     Park code to the answer a map question needs.
 
-    Only defunct parks with a resolved coordinate survive. Both filters matter:
-    an open park is a question about the present, and a park with no coordinate
-    has no answer.
+    Three filters, and each drops a different kind of bad question: an open
+    park is a question about the present, a short-lived one punishes correct
+    reasoning, and one with no coordinate has no answer at all.
     """
     index = {}
     for park_id, park in parks.items():
-        if not is_defunct(park):
+        if not (is_defunct(park) and served_long_enough(park)):
             continue
         key = _city_key(park)
         point = coords.get(key) if key else None
