@@ -109,9 +109,15 @@ def list_candidates(status="needs_review", limit=50, year=None):
         if not last_key or len(out) >= limit:
             break
 
-    # Oldest first. A candidate's value does not decay, but working them in a
-    # stable order means a session can be resumed where it stopped.
-    out.sort(key=lambda i: (i.get("gameDate") or "", i.get("gameId") or ""))
+    # Best first, then oldest.
+    #
+    # A queue this long is never finished, it is abandoned - so what matters is
+    # what somebody sees in the first twenty minutes, not that the whole thing
+    # is ordered. Chronological was the one ordering that said nothing at all
+    # about whether a candidate was worth the time.
+    out.sort(key=lambda i: (-int(i.get("candidateScore") or 0),
+                            i.get("gameDate") or "",
+                            i.get("gameId") or ""))
     return out[:limit]
 
 

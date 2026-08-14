@@ -47,7 +47,12 @@ def to_candidate(row):
         "sport": "news",
         "league": row.get("section") or "Sport",
         "reason": "narrative_event",
-        "notabilityScore": 70,
+        # The score the source gave this headline, carried through so the
+        # review panel can put the sackings and bans above the match reports.
+        # Without it the queue is chronological, which is the one ordering that
+        # says nothing about whether a candidate is worth the time.
+        "notabilityScore": 70 + int(row.get("candidateScore") or 0),
+        "candidateScore": int(row.get("candidateScore") or 0),
         "gameId": f"news-{row['url'].rsplit('/', 1)[-1][:60]}",
         "gameDate": event_date,
         "year": int(y),

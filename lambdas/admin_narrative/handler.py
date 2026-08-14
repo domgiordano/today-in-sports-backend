@@ -58,6 +58,7 @@ def handler(event, context):
             'publishedAt': (c.get('facts') or {}).get('publishedAt'),
             'sourceName': c.get('sourceName'),
             'sourceDatasetRef': c.get('sourceDatasetRef'),
+            'candidateScore': int(c.get('candidateScore') or 0),
             'usable': bool(sentence and c.get('sourceDatasetRef')),
             'status': c.get('status') or 'needs_review',
         })
