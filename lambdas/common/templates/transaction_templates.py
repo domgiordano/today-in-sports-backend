@@ -59,6 +59,11 @@ def _q(event, qtype, prompt, answer, **kw):
         "isNegroLeagues": event.get("isNegroLeagues", False),
         "mmdd": event["mmdd"],
         "year": event["year"],
+        # Carried so the assembler can prefer the more notable of two
+        # equally-eligible questions. Its tiebreak read this field from the
+        # question and no template ever put it there, so every candidate
+        # scored zero and selection fell through to a hash of the id.
+        "notabilityScore": event.get("notabilityScore"),
         "sourceEventId": event["gameId"],
         "sourceReason": event["reason"],
         "sourceName": event["sourceName"],

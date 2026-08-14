@@ -26,6 +26,7 @@ from decimal import Decimal
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from lambdas.common import constants                              # noqa: E402
+from lambdas.common.notability import prominence                  # noqa: E402
 from lambdas.common.templates import award_templates as award_tpl  # noqa: E402
 from lambdas.common.templates import lineup_templates as lineup_tpl  # noqa: E402
 from lambdas.common.templates import map_templates as map_tpl     # noqa: E402
@@ -84,6 +85,12 @@ def build_questions(events, circuits=None, accolades=None, parks=None):
     `playoff_overtime` — so the template sets are kept apart and each gets only
     its own events.
     """
+    # Scores are made comparable across sports before anything is picked from
+    # them. Each detector set its own and they were never calibrated against
+    # one another, so a routine second-tier win outranked a decorated player's
+    # signing - and the assembler had no other lever for choosing.
+    prominence.apply(events, accolades)
+
     # Transactions are MLB but are not games, so they are split out first —
     # the game-level templates expect a box score and would find none.
     tran_events = [e for e in events
