@@ -120,9 +120,17 @@ class TestAnachronisticNames:
                       "Atlanta Hawks 133-75. What was the margin?")
         assert "team name may be anachronistic - check the city" in flags_for(q)
 
-    def test_an_old_hockey_question_is_held(self):
-        assert "team name may be anachronistic - check the city" in flags_for(
-            _q(sport="nhl", year=1960))
+    def test_an_old_hockey_question_is_no_longer_held(self):
+        """
+        Hockey came off the suspect list once the source learned era names.
+
+        The NHL game log carries a tricode that is specific to the era, so MNS
+        resolves to the Minnesota North Stars and DAL to the Dallas Stars with
+        no relocation date needed anywhere. 10,972 team names were corrected by
+        that one change, and holding hockey for a human afterwards would be
+        asking somebody to re-check work already known to be right.
+        """
+        assert flags_for(_q(sport="nhl", year=1960)) == []
 
     def test_a_modern_basketball_question_is_approved(self):
         assert flags_for(_q(sport="nba", year=2019)) == []

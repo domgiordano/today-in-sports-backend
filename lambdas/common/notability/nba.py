@@ -55,6 +55,27 @@ def has_usable_teams(game):
     return bool(game["away"].get("team")) and bool(game["home"].get("team"))
 
 
+# A basketball game nobody won by any points is a game nobody recorded. The
+# source has no scores for much of the 1940s and returns 0 rather than null,
+# which the low-score detector read as the lowest score in history: 1,415 of
+# 1,898 NBA events were "combined for only 0 points", three quarters of the
+# sport's entire corpus.
+#
+# They produced no questions only because a truthiness check downstream happens
+# to treat 0 as absent - an accident one refactor away from shipping, so the
+# judgement belongs here, where the data is known to be missing.
+MIN_CREDIBLE_TEAM_SCORE = 20
+
+
+def has_credible_score(game):
+    """Did the source actually record what happened?"""
+    for side in ("away", "home"):
+        score = game[side].get("score")
+        if score is None or int(score) < MIN_CREDIBLE_TEAM_SCORE:
+            return False
+    return True
+
+
 def _sides(game):
     win = "away" if game["away"].get("isWinner") else "home"
     other = "home" if win == "away" else "away"
@@ -171,6 +192,10 @@ def run(games, dedupe=True):
     events = []
     for g in games:
         if not has_usable_teams(g) or not g.get("gameDate"):
+            continue
+        # Every NBA detector reasons about the score, so a game without one is
+        # not a quiet gap - it is a wrong answer waiting to be asked.
+        if not has_credible_score(g):
             continue
         for det in DETECTORS:
             events.extend(det(g))

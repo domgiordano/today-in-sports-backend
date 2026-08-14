@@ -309,8 +309,12 @@ def validate(q):
     # The code must start with a letter. Retrosheet ids always do - CL4, NYA,
     # BOS - and without that anchor the pattern also matches a bare year, so
     # "the 2001 season" was being rejected as an unresolved team code.
+    # An all-caps token has to stand alone to be a stray code. "the LA Clippers"
+    # is the club's actual registered name since 2015, and rejecting it threw
+    # away nine real questions - so the code must be the whole of what follows
+    # "the", not the first word of a longer name.
     import re
-    if re.search(r"\bthe [A-Z][A-Z0-9]{1,3}\b", q.get("prompt", "")):
+    if re.search(r"\bthe [A-Z][A-Z0-9]{1,3}\b(?! [A-Z][a-z])", q.get("prompt", "")):
         problems.append("unresolved team code in prompt")
     if not q.get("sourceDatasetRef"):
         problems.append("missing sourceDatasetRef")

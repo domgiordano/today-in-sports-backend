@@ -44,18 +44,33 @@ MAX_PLAUSIBLE_COUNT = 1_000_000
 # Sources that hand back today's franchise name whatever year is asked for.
 #
 # The MLB source resolves a club to the name it carried on the date, which is
-# what yields "Brooklyn Robins" for a 1920 game. The basketball and hockey
-# sources have no such lookup, so a 1956 game comes back as "Los Angeles Lakers
-# routed the Atlanta Hawks" - a sentence in which both clubs are in the wrong
-# city, the Lakers being in Minneapolis until 1960 and the Hawks in St. Louis
-# until 1968. The question is confidently, checkably wrong.
+# what yields "Brooklyn Robins" for a 1920 game. Hockey now does too: the NHL
+# game log carries an era-specific tricode, so MNS resolves to the Minnesota
+# North Stars and DAL to the Dallas Stars without needing to know a relocation
+# date at all.
 #
-# Until those sources learn franchise history, old questions from them are a
-# human's call rather than a script's.
-SPORTS_WITHOUT_HISTORICAL_NAMES = ("nba", "nhl")
+# Basketball still cannot. balldontlie returns the modern franchise name *and*
+# the modern code for a 1953 game, so there is no signal in the data saying
+# which era it belongs to - "the Atlanta Hawks and Sacramento Kings met on
+# January 20, 1953" names two cities neither club had reached, and nothing in
+# the payload could have said otherwise. Those stay a human's call until
+# there is a source that knows.
+SPORTS_WITHOUT_HISTORICAL_NAMES = ("nba",)
 
-# Before this, relocations are common enough that a modern name is a real risk.
-RELOCATION_ERA_BEFORE = 1980
+# Before this, a modern franchise name may not be the name the club carried.
+#
+# This was 1980, on the assumption that relocations were a mid-century thing.
+# They are not: Seattle became Oklahoma City in 2008, New Jersey became
+# Brooklyn in 2012, Charlotte took its name back in 2014. 185 events named a
+# club under a name it did not yet have, and every one of them was after 1980
+# and so sailed straight past the flag - "the Oklahoma City Thunder routed the
+# LA Clippers" on a game played in 1988.
+#
+# The cutoff sits after the last identity change anyone has made, because a
+# year cutoff is the only rule available while the source gives no era signal
+# at all. It is blunt and it costs most of the basketball inventory to review
+# rather than auto-approval, which is the right side to be wrong on.
+RELOCATION_ERA_BEFORE = 2015
 
 
 def _norm(text):
@@ -151,6 +166,59 @@ def flags_for(q):
     return problems
 
 
+def iter_status(table, status):
+    """Every question in one status, a page at a time."""
+    last_key = None
+    while True:
+        kwargs = {
+            "IndexName": constants.QUESTIONS_STATUS_INDEX,
+            "KeyConditionExpression": Key("status").eq(status),
+        }
+        if last_key:
+            kwargs["ExclusiveStartKey"] = last_key
+        resp = table.query(**kwargs)
+        for item in resp.get("Items", []):
+            yield item
+        last_key = resp.get("LastEvaluatedKey")
+        if not last_key:
+            return
+
+
+def recheck_approved(table, apply_changes):
+    """
+    Re-run the rules over already-approved questions.
+
+    Every rule here was added after some questions had already been approved,
+    and this script only ever looked at drafts - so a new rule silently applied
+    to future questions and never to the ones already through. The relocation
+    cutoff moving from 1980 to 2015 left 199 approved questions naming clubs in
+    cities they had not reached, and nothing would have looked at them again.
+
+    Demotes rather than rejects: failing a rule means "a person should look",
+    which is what draft plus a flag says.
+    """
+    demoted = 0
+    for q in iter_status(table, "approved"):
+        # Hand-written questions have no generator and no rule to re-apply;
+        # a person already decided about them with the source in front of them.
+        if q.get("authoredBy"):
+            continue
+        problems = flags_for(q)
+        if not problems:
+            continue
+        demoted += 1
+        if apply_changes:
+            table.update_item(
+                Key={"questionId": q["questionId"]},
+                UpdateExpression=("SET #s = :d, reviewFlags = :f, "
+                                  "reviewedBy = :who REMOVE reviewedAt"),
+                ExpressionAttributeNames={"#s": "status"},
+                ExpressionAttributeValues={
+                    ":d": "draft", ":f": problems, ":who": "auto-review-recheck"},
+            )
+    return demoted
+
+
 def iter_drafts(table):
     """
     Every draft question, a page at a time.
@@ -182,10 +250,20 @@ def main():
     ap.add_argument("--apply", action="store_true", help="write the decisions")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--limit", type=int, help="cap approvals, for a trial run")
+    ap.add_argument("--recheck", action="store_true",
+                    help="re-run the rules over approved questions and demote "
+                         "any that now fail")
     args = ap.parse_args()
 
     dynamo = boto3.resource("dynamodb")
     table = dynamo.Table(constants.QUESTIONS_TABLE_NAME)
+
+    # Approved first, so a question demoted by a rule change is reconsidered in
+    # the same run rather than sitting approved until somebody notices.
+    if args.recheck:
+        demoted = recheck_approved(table, args.apply)
+        print(f"approved questions now failing the rules: {demoted}"
+              + ("" if args.apply else " (not written)"))
 
     # Decisions are made and written in one pass over the stream, so an
     # interrupted run leaves a partially-reviewed bank rather than a half-built

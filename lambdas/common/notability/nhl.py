@@ -43,6 +43,17 @@ def _base(game, reason, score, title, facts):
 
 
 def has_usable_teams(game):
+    """
+    Two named NHL clubs.
+
+    `isLeagueGame` is the source's verdict on whether both sides were actually
+    NHL teams - the schedule also carries All-Star squads, Canada Cup national
+    sides and touring European clubs. Absent on games normalised before that
+    field existed, and those are treated as league games so an old corpus still
+    loads rather than silently emptying.
+    """
+    if game.get("isLeagueGame") is False:
+        return False
     return bool(game["away"].get("team")) and bool(game["home"].get("team"))
 
 

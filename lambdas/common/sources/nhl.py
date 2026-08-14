@@ -19,6 +19,7 @@ Two endpoints are used:
 """
 
 import json
+import re
 import os
 import time
 import urllib.error
@@ -67,49 +68,68 @@ def _get(url):
 
 # ------------------------------------------------------------- franchises
 
-def load_franchises(cache_dir=None):
-    """
-    Map an abbreviation plus a season to the franchise name in use then.
+# One row per team identity the NHL has ever had, each with its own tricode.
+#
+# The franchise endpoint this used to read has one row per *franchise*, keyed on
+# whichever abbreviation that franchise uses today - so franchise 15 is "DAL"
+# and Minnesota's 2,235 games from 1967-1993 resolved to nothing, printing the
+# bare code "MNS" as the team name. This endpoint has both: MNS is the
+# Minnesota North Stars and DAL is the Dallas Stars, as separate rows.
+#
+# That the tricode is era-specific is the whole trick. The game log already
+# carries the code that was correct on the day, so resolving it needs no season
+# window and cannot pick the wrong era - MNS appears only in games from 1967 to
+# 1993 and DAL only from 1993 on.
+TEAMS_URL = "https://api.nhle.com/stats/rest/en/team"
 
-    Abbreviations are reused across history — ATL was the Flames and later the
-    Thrashers — so the season window is what disambiguates.
-    """
-    cached = os.path.join(cache_dir, "nhl_franchises.json") if cache_dir else None
+
+def load_teams(cache_dir=None):
+    """Every NHL team identity, keyed by the tricode used at the time."""
+    cached = os.path.join(cache_dir, "nhl_teams.json") if cache_dir else None
     if cached and os.path.exists(cached):
         with open(cached) as f:
             data = json.load(f)
     else:
-        data = _get(f"{RECORDS}/franchise")
+        data = _get(TEAMS_URL)
         if cached:
             os.makedirs(cache_dir, exist_ok=True)
             with open(cached, "w") as f:
                 json.dump(data, f)
 
     out = {}
-    for fr in data.get("data", []):
-        abbrev = fr.get("teamAbbrev")
-        if not abbrev:
+    for team in data.get("data", []):
+        code, name = team.get("triCode"), team.get("fullName")
+        if not (code and name):
             continue
-        out.setdefault(abbrev, []).append({
-            "name": fr.get("fullName") or abbrev,
-            "first": fr.get("firstSeasonId") or 0,
-            "last": fr.get("lastSeasonId"),
-        })
+        # "Ottawa Senators (1917)" and "Winnipeg Jets (1979)" carry a
+        # disambiguating year the API needs and a quiz prompt does not.
+        out[code] = re.sub(r"\s*\(\d{4}\)\s*$", "", name).strip()
     return out
 
 
-def team_name(franchises, abbrev, season):
-    """season is the API's 19931994 form."""
-    options = franchises.get(abbrev)
-    if not options:
-        return abbrev
-    for o in options:
-        if season < (o["first"] or 0):
-            continue
-        if o["last"] and season > o["last"]:
-            continue
-        return o["name"]
-    return options[-1]["name"]
+def team_name(teams, abbrev, season=None):
+    """
+    The club's name on the day, or None when the code is not an NHL club.
+
+    None rather than the raw code, because the caller has to be able to tell a
+    club apart from a national side. `season` is accepted and ignored: the
+    tricode already encodes the era, and taking it keeps existing callers
+    working.
+    """
+    return teams.get(abbrev)
+
+
+def is_nhl_club(teams, abbrev):
+    """
+    Was this an NHL club at all?
+
+    The schedule carries more than league games: All-Star squads (ALL, 1ST,
+    2ND, PAC, CEN), national teams (CAN, SWE, URS, TCH) from the Canada Cup and
+    Summit Series, and European clubs from exhibition tours. 482 of 65,766
+    games have one, and a quiz that asks who won a Soviet Union versus Canada
+    game and files it as an NHL result is wrong twice over.
+    """
+    return abbrev in teams
 
 
 # -------------------------------------------------------------- normalize
@@ -132,7 +152,7 @@ def normalize(game, franchises, source_url, day_date=None):
     def side(t, score, opp_score):
         abbrev = t.get("abbrev")
         return {
-            "team": team_name(franchises, abbrev, season),
+            "team": team_name(franchises, abbrev, season) or abbrev,
             "teamId": abbrev,
             "league": "NHL",
             "leagueId": "NHL",
@@ -143,8 +163,14 @@ def normalize(game, franchises, source_url, day_date=None):
         }
 
     game_type = game.get("gameType")
+    # An NHL fixture is one between two NHL clubs. All-Star squads, national
+    # teams and touring European sides all appear on this schedule, and a
+    # question calling a Canada-USSR result an NHL game is wrong twice over.
+    is_league_game = (is_nhl_club(franchises, away.get("abbrev"))
+                      and is_nhl_club(franchises, home.get("abbrev")))
     return {
         "sport": "nhl",
+        "isLeagueGame": is_league_game,
         "gameId": game.get("id"),
         "gameDate": game.get("gameDate") or day_date,
         "season": season,
@@ -180,7 +206,7 @@ def is_final(game):
 
 def fetch_week(start, cache_dir=None, franchises=None):
     """One request returns seven days, scores included."""
-    franchises = franchises if franchises is not None else load_franchises(cache_dir)
+    franchises = franchises if franchises is not None else load_teams(cache_dir)
     url = f"{API}/schedule/{start}"
     payload = _get(url)
 
@@ -198,7 +224,7 @@ def fetch_range(start, end, cache_dir=None, progress=None):
     Follows the API's own nextStartDate where offered, falling back to a
     seven-day step so a missing pointer cannot stall the walk.
     """
-    franchises = load_franchises(cache_dir)
+    franchises = load_teams(cache_dir)
     cur = start
     seen = set()
     out = []
