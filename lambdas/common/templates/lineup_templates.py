@@ -89,7 +89,20 @@ def _q(event, qtype, prompt, answer, **kw):
 
 
 def who_started(event, ctx):
-    """Pick the four who started this game from a list of eight."""
+    """
+    Pick the four who started a named game from a list of eight.
+
+    The game has to be named. Without it the prompt read "four of these eight
+    players started this game" against a date and a list of names, which asks
+    the player to identify a fixture they were never told about — there is no
+    way to reason toward the answer, only to recognise the names.
+    """
+    facts = event.get("facts") or {}
+    away, home = facts.get("awayTeam"), facts.get("homeTeam")
+    if not (away and home):
+        # Better no question than an unanswerable one.
+        return []
+
     lineup = [n for n in (event.get("lineups") or []) if n]
     if len(lineup) < MIN_RECORDED:
         return []
@@ -112,8 +125,8 @@ def who_started(event, ctx):
         real + decoys,
         key=lambda n: hashlib.sha1(f"o{event['gameId']}{n}".encode()).hexdigest())
 
-    prompt = (f"{pretty_date(event['gameDate'])}: four of these eight players "
-              f"started this game. Which four?")
+    prompt = (f"{pretty_date(event['gameDate'])}: the {away} played the {home}. "
+              f"Four of these eight players started that game. Which four?")
 
     return [_q(event, "multi", prompt, sorted(real),
                options=options,

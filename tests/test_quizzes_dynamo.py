@@ -72,3 +72,32 @@ def test_a_quiz_with_no_questions_is_harmless():
 
     with patch.object(quizzes_dynamo, "_table", return_value=table):
         assert quizzes_dynamo.used_question_ids("08-13") == set()
+
+
+def test_published_runway_counts_the_run_not_the_total(monkeypatch):
+    """
+    Sixty published days with a hole on Tuesday is a dark Tuesday. A total
+    would report sixty and say nothing about the hole.
+    """
+    from lambdas.common import quizzes_dynamo as qd
+
+    monkeypatch.setattr(qd, "list_by_status", lambda status, limit=400: [
+        {"quizDate": "2026-08-14"}, {"quizDate": "2026-08-15"},
+        # 08-16 missing
+        {"quizDate": "2026-08-17"}, {"quizDate": "2026-08-18"},
+    ])
+
+    out = qd.published_runway(today="2026-08-14")
+    assert out["runwayDays"] == 2
+    assert out["publishedThrough"] == "2026-08-15"
+    assert out["goesDarkOn"] == "2026-08-16"
+
+
+def test_published_runway_with_nothing_published(monkeypatch):
+    from lambdas.common import quizzes_dynamo as qd
+    monkeypatch.setattr(qd, "list_by_status", lambda status, limit=400: [])
+
+    out = qd.published_runway(today="2026-08-14")
+    assert out["runwayDays"] == 0
+    assert out["publishedThrough"] is None
+    assert out["goesDarkOn"] == "2026-08-14"

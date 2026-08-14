@@ -39,4 +39,8 @@ def handler(event, context):
         'count': len(items),
         'completeCount': complete,
         'incompleteCount': len(items) - complete,
+        # The number that decides whether the game is playable next month.
+        # Assembly is automatic, publishing is not, so this is always the
+        # shorter of the two and the only one a player ever sees.
+        'published': quizzes_dynamo.published_runway(),
     })

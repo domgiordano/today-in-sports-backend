@@ -6,7 +6,7 @@ thing from an event's `gameDate`, which is the local date a game was played. The
 two must not be conflated.
 """
 
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 import boto3
 from boto3.dynamodb.conditions import Key
@@ -116,6 +116,39 @@ def set_status(quiz_date, status):
     )
     log.info(f"quiz {quiz_date} -> {status}")
     return resp.get("Attributes")
+
+
+def published_runway(today=None):
+    """
+    How many consecutive days from today already have a published quiz.
+
+    This is the number that decides whether the game is playable next month.
+    Assembly is monthly and automatic; publishing is deliberate and manual, so
+    the published run is always shorter than the assembled one and it is the
+    only one a player ever sees. `play_start` refuses anything not published,
+    which means the day after this run ends the app answers "no published quiz"
+    and there is no quiz at all.
+
+    Counted as a run rather than a total: sixty published days with a hole on
+    Tuesday is a dark Tuesday, and a count would report sixty.
+    """
+    today = today or _now()[:10]
+    published = {q["quizDate"] for q in list_by_status("published", limit=400)
+                 if q.get("quizDate", "") >= today}
+
+    day, runway = date.fromisoformat(today), 0
+    while day.isoformat() in published:
+        runway += 1
+        day += timedelta(days=1)
+
+    return {
+        "runwayDays": runway,
+        "publishedThrough": (date.fromisoformat(today)
+                             + timedelta(days=runway - 1)).isoformat()
+        if runway else None,
+        "goesDarkOn": (date.fromisoformat(today)
+                       + timedelta(days=runway)).isoformat(),
+    }
 
 
 def used_question_ids(mmdd):

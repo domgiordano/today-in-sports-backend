@@ -12,7 +12,10 @@ def _event(reason="no_hitter", year=1991, lineup=None):
     return {
         "sport": "mlb", "league": "MLB", "reason": reason,
         "gameId": f"g-{year}", "gameDate": f"{year}-08-13",
-        "year": year, "mmdd": "08-13", "title": "t", "facts": {},
+        "year": year, "mmdd": "08-13", "title": "t",
+        # The teams are what name the game in the prompt; without them the
+        # question is unanswerable and the template declines to build it.
+        "facts": {"awayTeam": "Orioles", "homeTeam": "Athletics"},
         "lineups": lineup if lineup is not None
                    else [f"Player {i}" for i in range(18)],
         "sourceName": "Retrosheet", "sourceDatasetRef": "https://retrosheet.org",
@@ -108,3 +111,20 @@ def test_validation_catches_an_answer_outside_the_options():
     dropped = q["answer"][0]
     q["options"] = [o for o in q["options"] if o != dropped] + ["Someone Else"]
     assert "a correct name is missing from the options" in tpl.validate(q)
+
+
+def test_a_game_with_no_teams_makes_no_question():
+    """
+    The prompt has to name the fixture. Without it a player is asked to
+    identify a game they were never told about, which cannot be reasoned
+    toward — only recognised. No question beats an unanswerable one.
+    """
+    event = _event()
+    event["facts"] = {}
+    assert tpl.who_started(event, _ctx()) == []
+
+
+def test_the_prompt_names_both_teams():
+    q = tpl.who_started(_event(), _ctx())[0]
+    assert "Orioles" in q["prompt"] and "Athletics" in q["prompt"]
+    assert "this game" not in q["prompt"]
