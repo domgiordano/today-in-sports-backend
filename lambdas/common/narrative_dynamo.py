@@ -106,7 +106,11 @@ def list_candidates(status="needs_review", limit=50, year=None):
         out.extend(i for i in resp.get("Items", [])
                    if (i.get("status") or "needs_review") == status)
         last_key = resp.get("LastEvaluatedKey")
-        if not last_key or len(out) >= limit:
+        # Read the whole partition before ranking. Stopping at `limit` and
+        # sorting afterwards sorts an arbitrary early page rather than the
+        # queue - the best candidate would sit unseen on page two hundred, and
+        # the panel would look like the sort was broken.
+        if not last_key:
             break
 
     # Best first, then oldest.

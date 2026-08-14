@@ -270,3 +270,25 @@ def test_the_two_narrative_sport_constants_agree():
     # exclusion silently stops matching and the leak comes back.
     from lambdas.common.templates import ordering_templates as ord_tpl
     assert ord_tpl.NARRATIVE_SPORT == nd.NARRATIVE_SPORT
+
+
+def test_the_queue_ranks_the_whole_partition_not_the_first_page(monkeypatch):
+    """
+    The listing stopped paginating once it had `limit` rows and sorted those.
+    With a backfilled archive that sorts an arbitrary early page: the best
+    candidate sits unseen on page two hundred and the panel looks broken.
+    """
+    pages = [
+        {"Items": [dict(candidate(), gameId=f"a{i}", candidateScore=8)
+                   for i in range(50)],
+         "LastEvaluatedKey": {"k": 1}},
+        {"Items": [dict(candidate(), gameId="best", candidateScore=30)]},
+    ]
+
+    class FakeTable:
+        def query(self, **kwargs):
+            return pages[1] if kwargs.get("ExclusiveStartKey") else pages[0]
+
+    monkeypatch.setattr(nd, "_events", lambda: FakeTable())
+    top = nd.list_candidates(limit=5)
+    assert top[0]["gameId"] == "best"
