@@ -341,3 +341,27 @@ def test_a_restated_question_is_never_auto_approved():
 
     # And the same question typed by a person is not held.
     assert ar.flags_for(dict(q, machineAuthored=False)) == []
+
+
+def test_the_queue_does_not_open_with_four_versions_of_one_story():
+    """
+    Only 6% of the queue duplicates another row, but those rows all score
+    identically and so arrive as a block at the top - the first screen was four
+    articles about Howard Wilkinson being sacked. Nothing is dropped; the
+    duplicates just stop arriving consecutively.
+    """
+    def c(score, date, sentence, gid):
+        return {"candidateScore": score, "gameDate": date, "gameId": gid,
+                "facts": {"headline": sentence, "summary": ""}}
+
+    ranked = nd._one_story_at_a_time([
+        c(30, "2003-03-10", "Wilkinson shocked by sacking", "a"),
+        c(30, "2003-03-10", "Wilkinson wishes Sunderland well", "b"),
+        c(30, "2003-03-10", "Wilkinson is sacked after 20 games", "c"),
+        c(28, "2003-03-11", "Lara quits as captain", "d"),
+    ])
+
+    assert len(ranked) == 4, "no candidate may be dropped"
+    assert ranked[0]["gameId"] == "a", "the best candidate still leads"
+    assert ranked[1]["gameId"] == "d", "a different story comes second"
+    assert {q["gameId"] for q in ranked} == {"a", "b", "c", "d"}

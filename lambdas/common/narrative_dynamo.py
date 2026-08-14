@@ -33,6 +33,7 @@ from a template's output.
 """
 
 import hashlib
+import re
 from datetime import datetime, timezone
 
 import boto3
@@ -60,6 +61,15 @@ CANDIDATE_STATUSES = ("needs_review", "written", "discarded")
 WRITABLE_TYPES = ("mc", "clue", "numeric")
 
 MIN_DISTRACTORS = 3
+
+# Used only to guess what an article is about, so two write-ups of the same
+# sacking can be kept apart in the queue. Nothing depends on it being right.
+_PROPER_NOUN = re.compile(r"\b[A-Z][a-z]{2,}(?:\s+[A-Z][a-z]{2,})*\b")
+_NOT_A_SUBJECT = {
+    "The", "This", "That", "But", "And", "For", "With", "From", "After",
+    "Before", "Sport", "Yesterday", "Today", "Tonight", "Last", "Next",
+    "One", "Two", "Second", "First", "Mister", "Sir",
+}
 
 
 def _events():
@@ -122,7 +132,54 @@ def list_candidates(status="needs_review", limit=50, year=None):
     out.sort(key=lambda i: (-int(i.get("candidateScore") or 0),
                             i.get("gameDate") or "",
                             i.get("gameId") or ""))
-    return out[:limit]
+    return _one_story_at_a_time(out)[:limit]
+
+
+def _story_key(candidate):
+    """
+    A rough identity for the event an article is about: its date plus the
+    surname of the first name in its sentence. Crude on purpose - it only has
+    to be good enough to notice that four articles are about Howard Wilkinson.
+    """
+    entities = [e.split()[-1] for e in _PROPER_NOUN.findall(cited_sentence(candidate))
+                if e.split()[0] not in _NOT_A_SUBJECT]
+    # The last word of the name, so "Ashton resigns" and "Joe Ashton's letter
+    # of resignation" reach the same key rather than Ashton and Joe.
+    #
+    # The first, not the alphabetically-first: a headline leads with its
+    # subject, and `min()` moved the key around depending on who else got
+    # mentioned - "Wilkinson sacked" keyed on Wilkinson while "Wilkinson wishes
+    # Sunderland well" keyed on Sunderland, so the two never grouped.
+    return (candidate.get("gameDate") or "",
+            entities[0] if entities else candidate.get("gameId") or "")
+
+
+def _one_story_at_a_time(candidates):
+    """
+    Reorder so consecutive candidates are about different events.
+
+    Only 6% of the queue duplicates another row, which sounds ignorable until
+    you notice where those rows sit: a big story draws four write-ups and all
+    four score identically, so they arrive as a block at the exact position
+    somebody starts reading. The first screen of the queue was four articles
+    about Howard Wilkinson being sacked.
+
+    Nothing is dropped - a second article on the same story is often the one
+    carrying the checkable number, and which of the four is best is a judgement
+    this cannot make. They just stop arriving consecutively: best of each story
+    first, in score order, then the second of each, and so on.
+    """
+    stories = {}
+    for c in candidates:
+        stories.setdefault(_story_key(c), []).append(c)
+
+    out, depth = [], 0
+    while len(out) < len(candidates):
+        for group in stories.values():
+            if depth < len(group):
+                out.append(group[depth])
+        depth += 1
+    return out
 
 
 def get_candidate(mmdd, year_event_id):

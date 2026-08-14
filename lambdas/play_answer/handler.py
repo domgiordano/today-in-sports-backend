@@ -19,11 +19,30 @@ from lambdas.common import (
 from lambdas.common.errors import handle_errors, NotFoundError, ValidationError
 from lambdas.common.logger import get_logger
 from lambdas.common.utility_helpers import parse_body, require_fields, success_response
-from lambdas.common.play_view import public_question, today_utc
+from lambdas.common.play_view import options_for, public_question, today_utc
 
 log = get_logger(__file__)
 
 HANDLER = 'play_answer'
+
+
+def _offers_second_chance(session, question, result, index):
+    """
+    Whether this miss earns a look at the options.
+
+    Only for questions that hold options and were served without them, only
+    when the player has not already taken the hint, and only once. Anything
+    else would be a way to keep guessing.
+    """
+    if result['correct']:
+        return False
+    if question.get('type') != 'mc':
+        return False
+    if plays_dynamo.hint_used(session, index):
+        return False
+    if plays_dynamo.second_chance_used(session, index):
+        return False
+    return bool(options_for(question))
 
 
 @handle_errors(HANDLER)
@@ -88,6 +107,27 @@ def handler(event, context):
     taken_clues = plays_dynamo.clues_taken(session, index)
     result = scoring.grade(question, body.get('answer'), seconds, used_hint,
                            taken_clues)
+
+    # A missed free response buys one look at the options, at the same price as
+    # having asked for them outright. Recall is still worth more than
+    # recognition — a right answer typed cold keeps full credit — but a miss is
+    # no longer the end of the question. The clock is not reset and servedAt is
+    # not cleared, so the time spent deciding still counts.
+    if _offers_second_chance(session, question, result, index):
+        plays_dynamo.record_second_chance(identity, quiz_date, index)
+        # Charged through the same flag the hint uses, so seeing the options
+        # costs the same however the player arrived at them.
+        plays_dynamo.record_hint(identity, quiz_date, index)
+        log.info(f'second chance granted on {quiz_date} index {index}')
+        return success_response({
+            'quizDate': quiz_date,
+            'index': index,
+            'retry': True,
+            'options': options_for(question),
+            'creditMultiplier': scoring.HINT_CREDIT,
+            'seconds': result['seconds'],
+            'state': 'playing',
+        })
 
     session = plays_dynamo.record_answer(
         identity, quiz_date, index, body.get('answer'), result,

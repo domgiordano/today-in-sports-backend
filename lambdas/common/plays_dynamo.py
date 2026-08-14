@@ -150,6 +150,27 @@ def hint_used(session, index):
     return int(index) in set(session.get("hintsUsed") or set())
 
 
+def record_second_chance(identity, quiz_date, index):
+    """
+    Record that a free-response miss has bought a look at the options.
+
+    Stored server-side for the same reason the hint is: it changes the score,
+    so the client cannot be the one that remembers it. Idempotent - the set
+    makes a replayed request one second chance rather than an endless supply.
+    """
+    resp = _table().update_item(
+        Key={"playId": session_key(identity, quiz_date)},
+        UpdateExpression="ADD secondChances :i",
+        ExpressionAttributeValues={":i": {int(index)}},
+        ReturnValues="ALL_NEW",
+    )
+    return resp.get("Attributes")
+
+
+def second_chance_used(session, index):
+    return int(index) in set(session.get("secondChances") or set())
+
+
 def record_clue(identity, quiz_date, index):
     """
     Take one more rung of a clue ladder.

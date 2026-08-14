@@ -246,3 +246,49 @@ class TestMapQuestionsLeakNothing:
         pub = play_view.public_question(self._q(), 0, 5)
         assert pub["type"] == "map"
         assert "Tap where" in pub["prompt"]
+
+
+class TestSecondChance:
+    """
+    A missed free response buys one look at the options.
+
+    The rules that matter are who gets one and who does not — anything looser
+    is a way to keep guessing until the answer turns up.
+    """
+
+    def _offers(self, session, question, result, index=0):
+        from lambdas.play_answer.handler import _offers_second_chance
+        return _offers_second_chance(session, question, result, index)
+
+    def _mc(self):
+        # questionId is what options_for shuffles by, so the order is stable
+        # for one question and not merely random.
+        return {"questionId": "q-1956-10-08", "type": "mc", "answer": "Don Larsen",
+                "distractors": ["Whitey Ford", "Sal Maglie", "Bob Turley"]}
+
+    def test_a_miss_on_a_free_response_earns_one(self):
+        assert self._offers({}, self._mc(), {"correct": False}) is True
+
+    def test_a_correct_answer_does_not(self):
+        assert self._offers({}, self._mc(), {"correct": True}) is False
+
+    def test_taking_the_hint_first_spends_it(self):
+        """They have already seen the options; a second look is not a second chance."""
+        session = {"hintsUsed": {0}}
+        assert self._offers(session, self._mc(), {"correct": False}) is False
+
+    def test_it_is_offered_once(self):
+        session = {"secondChances": {0}}
+        assert self._offers(session, self._mc(), {"correct": False}) is False
+
+    def test_formats_with_no_options_to_reveal_are_excluded(self):
+        for qtype in ("ordering", "map", "numeric", "multi", "clue"):
+            question = {**self._mc(), "type": qtype}
+            assert self._offers({}, question, {"correct": False}) is False, qtype
+
+    def test_it_is_tracked_per_question(self):
+        from lambdas.common import plays_dynamo
+        session = {"secondChances": {0, 2}}
+        assert plays_dynamo.second_chance_used(session, 0) is True
+        assert plays_dynamo.second_chance_used(session, 1) is False
+        assert plays_dynamo.second_chance_used(session, 2) is True
