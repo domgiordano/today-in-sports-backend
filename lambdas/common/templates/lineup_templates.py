@@ -88,6 +88,26 @@ def _q(event, qtype, prompt, answer, **kw):
     return q
 
 
+# Which two fields name the sides depends on why the event was notable, and
+# nothing normalises them. A no-hitter records who threw it and who was held
+# hitless; a postseason shutout records who won and who lost. Checking only for
+# awayTeam/homeTeam finds neither, and silently produced no question at all for
+# every no-hitter, perfect game and postseason shutout in the corpus.
+TEAM_FIELDS = (
+    ("awayTeam", "homeTeam"),
+    ("winningTeam", "losingTeam"),
+    ("throwingTeam", "noHitTeam"),
+)
+
+
+def teams_in(facts):
+    """The two sides, whichever pair of fields this event happens to use."""
+    for first, second in TEAM_FIELDS:
+        if facts.get(first) and facts.get(second):
+            return facts[first], facts[second]
+    return None, None
+
+
 def who_started(event, ctx):
     """
     Pick the four who started a named game from a list of eight.
@@ -97,9 +117,8 @@ def who_started(event, ctx):
     the player to identify a fixture they were never told about — there is no
     way to reason toward the answer, only to recognise the names.
     """
-    facts = event.get("facts") or {}
-    away, home = facts.get("awayTeam"), facts.get("homeTeam")
-    if not (away and home):
+    one, other = teams_in(event.get("facts") or {})
+    if not (one and other):
         # Better no question than an unanswerable one.
         return []
 
@@ -125,7 +144,7 @@ def who_started(event, ctx):
         real + decoys,
         key=lambda n: hashlib.sha1(f"o{event['gameId']}{n}".encode()).hexdigest())
 
-    prompt = (f"{pretty_date(event['gameDate'])}: the {away} played the {home}. "
+    prompt = (f"{pretty_date(event['gameDate'])}: the {one} played the {other}. "
               f"Four of these eight players started that game. Which four?")
 
     return [_q(event, "multi", prompt, sorted(real),

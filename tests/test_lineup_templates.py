@@ -128,3 +128,23 @@ def test_the_prompt_names_both_teams():
     q = tpl.who_started(_event(), _ctx())[0]
     assert "Orioles" in q["prompt"] and "Athletics" in q["prompt"]
     assert "this game" not in q["prompt"]
+
+
+def test_teams_are_found_whatever_the_event_calls_them():
+    """
+    Nothing normalises these. A no-hitter records who threw it and who was held
+    hitless; a postseason shutout records a winner and a loser. Looking only for
+    awayTeam/homeTeam finds neither, and every such game silently produced no
+    question at all.
+    """
+    assert tpl.teams_in({"awayTeam": "A", "homeTeam": "B"}) == ("A", "B")
+    assert tpl.teams_in({"winningTeam": "A", "losingTeam": "B"}) == ("A", "B")
+    assert tpl.teams_in({"throwingTeam": "A", "noHitTeam": "B"}) == ("A", "B")
+    assert tpl.teams_in({"innings": 9}) == (None, None)
+
+
+def test_a_no_hitter_still_makes_a_question():
+    event = _event()
+    event["facts"] = {"throwingTeam": "Orioles", "noHitTeam": "Athletics"}
+    q = tpl.who_started(event, _ctx())
+    assert q and "Orioles" in q[0]["prompt"] and "Athletics" in q[0]["prompt"]
