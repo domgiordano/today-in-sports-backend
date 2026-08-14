@@ -154,6 +154,15 @@ def flags_for(q):
                     problems.append("answer appears in a clue")
                     break
 
+    # A question drafted by restating a newspaper sentence has had no human
+    # reading, and every rule in this file is arithmetic over the question's
+    # own fields - none of them can tell whether the restatement is faithful to
+    # the source. Without this these would have passed cleanly and been
+    # approved on the next run, quietly undoing the reason they were drafted as
+    # drafts.
+    if q.get("machineAuthored"):
+        problems.append("restated from a source - check it against the sentence")
+
     # Negro Leagues questions are factually sound but carry framing decisions
     # that are not mine to make silently. Held for a person, deliberately.
     if q.get("isNegroLeagues"):

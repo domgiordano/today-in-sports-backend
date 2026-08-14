@@ -245,13 +245,20 @@ def validate(fields, candidate):
     return problems
 
 
-def question_from_candidate(candidate, fields, author):
+def question_from_candidate(candidate, fields, author, machine_authored=False):
     """
     Write a question from a candidate, and record what it was written from.
 
     Provenance comes from the candidate and never from `fields`: the caller
     supplies the wording, the corpus supplies the citation. That split is the
     whole reason this source is safe to use.
+
+    `machine_authored` marks a question drafted by restating the sentence
+    rather than typed by a person, and lands it as `draft`. The rule permits
+    the restatement - what it forbids is asserting a fact the sentence does not
+    - but the reason hand-written questions skip review is that a person
+    already read the source, and that reason does not hold here. So they go to
+    the queue like anything else, marked so it is obvious which is which.
     """
     problems = validate(fields, candidate)
     if problems:
@@ -288,9 +295,10 @@ def question_from_candidate(candidate, fields, author):
         # this source rests on this field being present and unedited.
         "citedSentence": sentence,
 
-        "status": "approved",
+        "status": "draft" if machine_authored else "approved",
         "authoredBy": author,
         "authoredAt": _now(),
+        "machineAuthored": machine_authored,
     }
 
     if qtype == "mc":

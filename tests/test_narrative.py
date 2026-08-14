@@ -292,3 +292,52 @@ def test_the_queue_ranks_the_whole_partition_not_the_first_page(monkeypatch):
     monkeypatch.setattr(nd, "_events", lambda: FakeTable())
     top = nd.list_candidates(limit=5)
     assert top[0]["gameId"] == "best"
+
+
+def test_a_machine_drafted_question_lands_as_draft(monkeypatch):
+    """
+    The rule permits restating a sentence; what it forbids is asserting a fact
+    the sentence does not carry. But hand-written questions skip review because
+    a person already read the source, and that reason does not hold for a
+    restatement — so those go to the queue like anything else.
+    """
+    monkeypatch.setattr(nd, "_questions",
+                        lambda: type("T", (), {"put_item": lambda s, Item: None})())
+    item = nd.question_from_candidate(
+        candidate(), mc_fields(), "claude-code", machine_authored=True)
+    assert item["status"] == "draft"
+    assert item["machineAuthored"] is True
+    # The citation still travels with it — that property is not negotiable.
+    assert "first-choice keeper" in item["citedSentence"]
+
+
+def test_a_hand_written_question_is_still_approved(monkeypatch):
+    monkeypatch.setattr(nd, "_questions",
+                        lambda: type("T", (), {"put_item": lambda s, Item: None})())
+    item = nd.question_from_candidate(candidate(), mc_fields(), "dom@example.com")
+    assert item["status"] == "approved"
+    assert item["machineAuthored"] is False
+
+
+def test_a_restated_question_is_never_auto_approved():
+    """
+    Every rule in auto_review is arithmetic over a question's own fields, and
+    none of them can tell whether a restatement is faithful to its source.
+    Without an explicit hold these pass cleanly and get approved on the next
+    run, undoing the reason they were drafted as drafts.
+    """
+    import importlib.util, pathlib
+    path = pathlib.Path(__file__).resolve().parents[1] / "scripts" / "auto_review.py"
+    spec = importlib.util.spec_from_file_location("auto_review", path)
+    ar = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(ar)
+
+    q = {"type": "numeric", "sport": "news", "year": 2000,
+         "prompt": "Denis Irwin retired on this day in 2000. How many caps had "
+                   "he won for the Republic of Ireland?",
+         "numericAnswer": 56, "answer": 56, "machineAuthored": True}
+    flags = ar.flags_for(q)
+    assert any("check it against the sentence" in f for f in flags)
+
+    # And the same question typed by a person is not held.
+    assert ar.flags_for(dict(q, machineAuthored=False)) == []
