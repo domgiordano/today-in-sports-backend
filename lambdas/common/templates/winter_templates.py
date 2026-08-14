@@ -391,7 +391,7 @@ def soccer_title_winner(event, ctx):
     return [_q(event, "mc",
                f"Which club clinched the {f['competition']} title on "
                f"{pretty_date(event['gameDate'])}?",
-               f["champion"], distractors=pool)]
+               f["champion"], distractors=pool, answerKind="club")]
 
 
 def soccer_title_margin(event, ctx):

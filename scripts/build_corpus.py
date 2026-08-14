@@ -31,6 +31,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from lambdas.common.notability import mlb as mlb_nb          # noqa: E402
 from lambdas.common.notability import milestones as ms       # noqa: E402
 from lambdas.common.notability import transactions as tran_nb  # noqa: E402
+from lambdas.common.sources import biofile
 from lambdas.common.sources import retrosheet as rs          # noqa: E402
 from lambdas.common.sources import retrosheet_transactions as rst  # noqa: E402
 
@@ -236,6 +237,11 @@ def main():
 
     print(rs.ATTRIBUTION, "\n")
 
+    # Resolved once for the whole run. From 1876 to 1897 the game logs give a
+    # starting pitcher's surname and nothing else, so a career built without
+    # this answers "Keefe" instead of "Tim Keefe".
+    bio = biofile.load(CACHE)
+
     acc = MilestoneAccumulator()
     total_games = total_events = 0
     seasons_done = 0
@@ -243,7 +249,8 @@ def main():
     with open(args.out, "w") as out:
         for year in range(args.start, args.end + 1):
             try:
-                games = rs.fetch_season(year, CACHE) + rs.fetch_postseason(year, CACHE)
+                games = (rs.fetch_season(year, CACHE, bio)
+                         + rs.fetch_postseason(year, CACHE, bio))
             except rs.SourceError:
                 continue
             if not games:

@@ -33,6 +33,8 @@ import urllib.request
 import zipfile
 from datetime import date as _date
 
+from lambdas.common.sources import biofile
+
 BASE = "https://www.retrosheet.org"
 UA = "today-in-sports/0.1 (dominickj.giordano@gmail.com)"
 SOURCE_NAME = "retrosheet"
@@ -220,7 +222,7 @@ def innings_from_outs(outs):
     return math.ceil(o / 6)
 
 
-def _players(row, gdate):
+def _players(row, gdate, bio=None):
     """
     Pull player identity out of a game-log record.
 
@@ -229,12 +231,25 @@ def _players(row, gdate):
     (a win is already an award to one pitcher) and a good proxy for position
     players, but it is not a full games-played count and should not be labelled
     as one.
+
+    `bio` is the Retrosheet biographical index, and it exists here for one era.
+    From 1876 to 1897 the starting-pitcher fields carry a bare surname - 34,319
+    of them - so a career built from these rows answers "Keefe" or "Galvin",
+    which reads as a data gap rather than an answer. The lineup fields never do
+    this, and neither field does it after 1897, so the lookup only ever fires
+    where the log is actually short. Passing no index leaves every name exactly
+    as the log gave it.
     """
+    def resolve(pid, name):
+        if bio and pid and biofile.looks_incomplete(name):
+            return biofile.display_name(bio, pid, fallback=name)
+        return name
+
     def person(id_key, name_key):
         pid, name = row[F[id_key]].strip(), row[F[name_key]].strip()
         if not pid or name in ("", "(none)"):
             return None
-        return {"id": pid, "name": name}
+        return {"id": pid, "name": resolve(pid, name)}
 
     lineups = []
     for side, start in (("away", F["vLineupStart"]), ("home", F["hLineupStart"])):
@@ -245,7 +260,7 @@ def _players(row, gdate):
             pid, name, pos = row[base].strip(), row[base + 1].strip(), row[base + 2].strip()
             if not pid or name in ("", "(none)"):
                 continue
-            lineups.append({"id": pid, "name": name, "position": pos,
+            lineups.append({"id": pid, "name": resolve(pid, name), "position": pos,
                             "side": side, "battingOrder": i + 1})
 
     return {
@@ -258,7 +273,8 @@ def _players(row, gdate):
     }
 
 
-def normalize(row, names, series=None, game_number=None, games_in_series=None):
+def normalize(row, names, series=None, game_number=None, games_in_series=None,
+              bio=None):
     """
     Convert one game-log record into the shared normalized game shape, so the
     existing detectors in notability/mlb.py run unchanged across both sources.
@@ -309,7 +325,7 @@ def normalize(row, names, series=None, game_number=None, games_in_series=None):
         # Player identity, needed for career milestones. Retrosheet ids are
         # stable across a career ("mcdoj001"), which is what makes "300th win"
         # computable with an exact date rather than only a season total.
-        "players": _players(row, gdate),
+        "players": _players(row, gdate, bio),
         "park": row[F["park"]],
         "sourceName": SOURCE_NAME,
         "sourceDatasetRef": (
@@ -321,14 +337,14 @@ def normalize(row, names, series=None, game_number=None, games_in_series=None):
 
 # ---------------------------------------------------------------- public API
 
-def fetch_season(year, cache_dir):
+def fetch_season(year, cache_dir, bio=None):
     """Regular-season games for a year, normalized."""
     names = load_team_names(cache_dir)
     rows = _rows_from_zip(_fetch(f"gl{year}.zip", cache_dir))
-    return [normalize(r, names) for r in rows if len(r) >= 161]
+    return [normalize(r, names, bio=bio) for r in rows if len(r) >= 161]
 
 
-def fetch_postseason(year, cache_dir):
+def fetch_postseason(year, cache_dir, bio=None):
     """
     Postseason games for a year, normalized, with series game numbers derived.
 
@@ -361,10 +377,12 @@ def fetch_postseason(year, cache_dir):
             total = len(matchup_rows)
             for i, r in enumerate(matchup_rows, start=1):
                 out.append(normalize(r, names, series=series,
-                                     game_number=i, games_in_series=total))
+                                     game_number=i, games_in_series=total,
+                                     bio=bio))
     return out
 
 
-def fetch_year(year, cache_dir):
+def fetch_year(year, cache_dir, bio=None):
     """Everything for a season — regular season plus postseason."""
-    return fetch_season(year, cache_dir) + fetch_postseason(year, cache_dir)
+    return (fetch_season(year, cache_dir, bio)
+            + fetch_postseason(year, cache_dir, bio))

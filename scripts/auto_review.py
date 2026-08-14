@@ -101,8 +101,14 @@ def flags_for(q):
     # Retrosheet records some nineteenth-century players by surname alone. The
     # question is not wrong, but "Keefe" reads as a data gap rather than an
     # answer, and a person should decide whether to keep it.
+    #
+    # Clubs are exempt, because a club answer is complete at one word. Juventus,
+    # PSV and Feyenoord are not truncated versions of anything, and eleven of
+    # them sat in the review queue looking like the same defect as "Keefe".
+    # The exemption is opt-in - a template says `answerKind="club"` - so a
+    # template that says nothing still gets flagged.
     if qtype in ("mc", "clue") and isinstance(answer, str):
-        if answer and len(answer.split()) < 2:
+        if answer and len(answer.split()) < 2 and q.get("answerKind") != "club":
             problems.append("answer is a single-token name")
 
     if qtype == "mc":

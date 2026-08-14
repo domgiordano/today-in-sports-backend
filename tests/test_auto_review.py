@@ -156,3 +156,20 @@ class TestReloadPreservesDecisions:
     def test_an_existing_decision_survives_a_reload(self, status):
         from scripts.load_corpus import status_for
         assert status_for("q1", {"q1": status}) == status
+
+
+def test_a_one_word_club_is_not_a_truncated_name():
+    """
+    The single-token flag exists to catch nineteenth-century players recorded
+    by surname alone. Juventus is not a truncated version of anything, and
+    eleven such answers sat in the queue looking like the same defect.
+    """
+    club = {"type": "mc", "answer": "Juventus", "answerKind": "club",
+            "prompt": "Which club clinched the Italian Serie A 2018/19 title "
+                      "on April 20, 2019?",
+            "distractors": ["Napoli", "Internazionale", "AC Milan"]}
+    assert flags_for(club) == []
+
+    # A template that says nothing about its answer is still flagged.
+    unspecified = dict(club); unspecified.pop("answerKind")
+    assert any("single-token" in f for f in flags_for(unspecified))
