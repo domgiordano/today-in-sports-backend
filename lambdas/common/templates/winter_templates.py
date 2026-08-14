@@ -290,8 +290,33 @@ def generate(events, ctx=None):
 
 # ---------------------------------------------------------------- basketball
 
+# Basketball is the one sport whose source cannot say what a club was called at
+# the time. balldontlie returns the modern franchise name *and* the modern code
+# for a 1953 game, so "the Atlanta Hawks and Sacramento Kings met on January 20,
+# 1953" names two cities neither club had reached, and nothing in the payload
+# could have said otherwise. Three sources were checked for a fix - the teams
+# endpoint has no history for surviving franchises, stats.nba.com is
+# unreachable, and Wikidata carries six name statements for the whole league.
+#
+# So the club is simply not named, exactly as a ballpark map question does not
+# name the clubs: the question is about the number, and the two teams were only
+# ever there for flavour. A question whose *answer* is a club name has no such
+# escape and is not built for these years at all.
+#
+# After this date the modern name is the name it had. It sits after the last
+# identity change anyone has made - Charlotte took its name back in 2014.
+NBA_NAMES_RELIABLE_FROM = 2015
+
+
+def _nba_can_name_clubs(event):
+    return int(event.get("year") or 0) >= NBA_NAMES_RELIABLE_FROM
+
+
 def nba_late_playoff_winner(event, ctx):
     if event["sport"] != "nba" or event["reason"] != "nba_late_playoff":
+        return []
+    # The answer is a club name, so there is no wording that avoids the problem.
+    if not _nba_can_name_clubs(event):
         return []
     f = event["facts"]
     pool = _pick(ctx.get("nba_teams", []), {f["winningTeam"], f["losingTeam"]}, 3)
@@ -314,11 +339,16 @@ def nba_blowout_margin(event, ctx):
     margin = f.get("margin")
     if not margin:
         return []
-    return [_q(event, "numeric",
-               f"On {pretty_date(event['gameDate'])}, the {f['winningTeam']} "
-               f"routed the {f['losingTeam']} {f['winningScore']}-"
-               f"{f['losingScore']}. What was the margin?",
-               margin, numericAnswer=margin, tolerance=4)]
+    if _nba_can_name_clubs(event):
+        prompt = (f"On {pretty_date(event['gameDate'])}, the {f['winningTeam']} "
+                  f"routed the {f['losingTeam']} {f['winningScore']}-"
+                  f"{f['losingScore']}. What was the margin?")
+    else:
+        prompt = (f"On {pretty_date(event['gameDate'])}, an NBA game finished "
+                  f"{f['winningScore']}-{f['losingScore']}. What was the "
+                  f"winning margin?")
+    return [_q(event, "numeric", prompt, margin,
+               numericAnswer=margin, tolerance=4)]
 
 
 def nba_combined_points(event, ctx):
@@ -330,12 +360,18 @@ def nba_combined_points(event, ctx):
     if not total:
         return []
     low = event["reason"] == "nba_low_score"
-    return [_q(event, "numeric",
-               f"The {f['winningTeam']} and {f['losingTeam']} met on "
-               f"{pretty_date(event['gameDate'])} in a famously "
-               f"{'low' if low else 'high'}-scoring game. How many points did "
-               f"the two teams score between them?",
-               total, numericAnswer=total, tolerance=8)]
+    band = "low" if low else "high"
+    if _nba_can_name_clubs(event):
+        prompt = (f"The {f['winningTeam']} and {f['losingTeam']} met on "
+                  f"{pretty_date(event['gameDate'])} in a famously "
+                  f"{band}-scoring game. How many points did the two teams "
+                  f"score between them?")
+    else:
+        prompt = (f"Two NBA teams met on {pretty_date(event['gameDate'])} in a "
+                  f"famously {band}-scoring game. How many points did they "
+                  f"score between them?")
+    return [_q(event, "numeric", prompt, total,
+               numericAnswer=total, tolerance=8)]
 
 
 # -------------------------------------------------------------------- soccer

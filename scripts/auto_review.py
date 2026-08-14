@@ -159,9 +159,34 @@ def flags_for(q):
     if q.get("isNegroLeagues"):
         problems.append("Negro Leagues - check the framing")
 
+    # Only when a club is actually named. The basketball templates now leave
+    # the clubs out for years the source cannot date - "two NBA teams met on
+    # January 20, 1953" asserts nothing about a city - so flagging by sport and
+    # year alone would hold back questions with no team name in them at all.
     if (q.get("sport") in SPORTS_WITHOUT_HISTORICAL_NAMES
-            and int(q.get("year") or 0) < RELOCATION_ERA_BEFORE):
+            and int(q.get("year") or 0) < RELOCATION_ERA_BEFORE
+            and _names_a_club(q)):
         problems.append("team name may be anachronistic - check the city")
+
+    return problems
+
+
+# Clubs are named in the prompt, in the answer, or among the distractors. A
+# question that mentions none of them cannot be wrong about a city.
+_CLUB_WORDS = re.compile(
+    r"\b(the [A-Z][a-z]+ [A-Z][a-z]+|Lakers|Celtics|Knicks|Warriors|Bulls|"
+    r"Hawks|Kings|Nets|Thunder|Wizards|Clippers|Grizzlies|Pelicans|Hornets|"
+    r"Jazz|Pacers|Bucks|Suns|Spurs|Nuggets|Pistons|Cavaliers|Rockets|Heat|"
+    r"Magic|Raptors|Timberwolves|76ers|Trail Blazers|Mavericks)\b")
+
+
+def _names_a_club(q):
+    haystack = " ".join(filter(None, [
+        q.get("prompt") or "",
+        q.get("answer") if isinstance(q.get("answer"), str) else "",
+        " ".join(str(d) for d in (q.get("distractors") or [])),
+    ]))
+    return bool(_CLUB_WORDS.search(haystack))
 
     return problems
 

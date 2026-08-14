@@ -169,3 +169,78 @@ def test_a_genuine_stray_code_is_still_caught():
          "prompt": "On May 2, 1886, the CL4 beat the Pittsburgh Alleghenys. "
                    "How many runs did they score?"}
     assert "unresolved team code in prompt" in tpl.validate(q)
+
+
+# ------------------------------------------- basketball, where the name is not known
+
+def nba_event(year, reason="nba_blowout", **facts):
+    base = {"winningTeam": "Sacramento Kings", "losingTeam": "Atlanta Hawks",
+            "winningScore": 120, "losingScore": 61, "margin": 59,
+            "combinedPoints": 181}
+    base.update(facts)
+    return {
+        "sport": "nba", "league": "NBA", "reason": reason,
+        "gameId": f"g{year}", "gameDate": f"{year}-01-20", "mmdd": "01-20",
+        "year": year, "facts": base,
+        "sourceName": "balldontlie", "sourceDatasetRef": "r",
+    }
+
+
+def test_an_old_basketball_question_does_not_name_the_clubs():
+    """
+    balldontlie returns the modern franchise name for a 1953 game, so naming
+    the clubs asserts two cities neither had reached. The question is about the
+    number; the teams were only ever there for flavour.
+    """
+    from lambdas.common.templates import winter_templates as tpl
+    [q] = tpl.nba_blowout_margin(nba_event(1953), {})
+    assert "Sacramento" not in q["prompt"]
+    assert "Atlanta" not in q["prompt"]
+    assert q["numericAnswer"] == 59
+
+
+def test_a_modern_basketball_question_still_names_them():
+    from lambdas.common.templates import winter_templates as tpl
+    [q] = tpl.nba_blowout_margin(nba_event(2022), {})
+    assert "Sacramento Kings" in q["prompt"]
+
+
+def test_an_old_combined_points_question_does_not_name_the_clubs():
+    from lambdas.common.templates import winter_templates as tpl
+    [q] = tpl.nba_combined_points(nba_event(1953, reason="nba_low_score"), {})
+    assert "Kings" not in q["prompt"] and "Hawks" not in q["prompt"]
+    assert "low-scoring" in q["prompt"]
+
+
+def test_an_old_who_won_question_is_not_built_at_all():
+    # Its answer *is* a club name, so no wording avoids the problem.
+    from lambdas.common.templates import winter_templates as tpl
+    ctx = {"nba_teams": ["A Team", "B Team", "C Team", "D Team", "E Team"]}
+    assert tpl.nba_late_playoff_winner(nba_event(1970, reason="nba_late_playoff"),
+                                       ctx) == []
+    assert tpl.nba_late_playoff_winner(nba_event(2022, reason="nba_late_playoff"),
+                                       ctx)
+
+
+def test_a_question_naming_no_club_is_not_flagged():
+    """
+    The flag exists to catch a wrong city. A question that names no club
+    cannot have one, and flagging by sport and year alone would hold back the
+    very questions the templates rewrote to be safe.
+    """
+    import importlib.util, pathlib
+    path = pathlib.Path(__file__).resolve().parents[1] / "scripts" / "auto_review.py"
+    spec = importlib.util.spec_from_file_location("auto_review", path)
+    ar = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(ar)
+
+    safe = {"type": "numeric", "sport": "nba", "year": 1953,
+            "prompt": "Two NBA teams met on January 20, 1953 in a famously "
+                      "low-scoring game. How many points did they score "
+                      "between them?",
+            "numericAnswer": 121, "answer": 121}
+    assert ar.flags_for(safe) == []
+
+    named = dict(safe, prompt="The Sacramento Kings and Atlanta Hawks met on "
+                              "January 20, 1953. How many points did they score?")
+    assert "team name may be anachronistic - check the city" in ar.flags_for(named)
