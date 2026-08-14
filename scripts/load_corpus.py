@@ -27,6 +27,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from lambdas.common import constants                              # noqa: E402
 from lambdas.common.notability import prominence                  # noqa: E402
+from lambdas.common.sources import nba_franchises                 # noqa: E402
 from lambdas.common.templates import award_templates as award_tpl  # noqa: E402
 from lambdas.common.templates import lineup_templates as lineup_tpl  # noqa: E402
 from lambdas.common.templates import map_templates as map_tpl     # noqa: E402
@@ -77,7 +78,8 @@ def status_for(question_id, decided):
     return decided.get(question_id, "draft")
 
 
-def build_questions(events, circuits=None, accolades=None, parks=None):
+def build_questions(events, circuits=None, accolades=None, parks=None,
+                    franchises=None):
     """
     Route each event to the templates for its own sport.
 
@@ -117,7 +119,8 @@ def build_questions(events, circuits=None, accolades=None, parks=None):
                                            "player_debut", "player_finale")]
     questions.extend(mlb_tpl.generate_milestones(milestone_events))
 
-    questions.extend(win_tpl.generate(winter_events))
+    questions.extend(win_tpl.generate(
+        winter_events, win_tpl.build_context(winter_events, franchises)))
 
     # Transaction context is corpus-wide: distractor teams are drawn from the
     # clubs active in the same decade, so it is built once over every deal
@@ -172,13 +175,19 @@ def main():
             accolades = json.load(f)
         print(f"accolades loaded for {len(accolades)} players")
 
+    # What each NBA club was called in each season. Loaded once; cached
+    # beside the game logs, since it changes when a team relocates.
+    franchises = nba_franchises.load(
+        os.environ.get("TIS_CACHE", os.path.expanduser("~/.cache/tis")))
+
     parks = {}
     if args.parks:
         with open(args.parks) as f:
             parks = json.load(f)
         print(f"defunct parks with coordinates: {len(parks)}")
 
-    questions = build_questions(events, circuits, accolades, parks)
+    questions = build_questions(events, circuits, accolades, parks,
+                                franchises)
     valid, rejected = [], 0
     reasons = collections.Counter()
     for q in questions:

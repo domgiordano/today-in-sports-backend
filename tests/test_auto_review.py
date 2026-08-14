@@ -118,7 +118,7 @@ class TestAnachronisticNames:
         q = _q(sport="nba", year=1956,
                prompt="On March 19, 1956, the Los Angeles Lakers routed the "
                       "Atlanta Hawks 133-75. What was the margin?")
-        assert "team name may be anachronistic - check the city" in flags_for(q)
+        assert any("did not carry that name" in f for f in flags_for(q))
 
     def test_an_old_hockey_question_is_no_longer_held(self):
         """

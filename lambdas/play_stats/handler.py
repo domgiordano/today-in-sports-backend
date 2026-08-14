@@ -75,6 +75,10 @@ def handler(event, context):
 
     return success_response({
         'scope': scope,
+        # Which slices a visitor may ask for. Only regions already past the
+        # publishing floor, so the picker cannot be used to discover that
+        # exactly one person in a country has played.
+        'regions': stats_dynamo.list_regions(MIN_REGION_PLAYERS),
         'all': summary,
         'week': _public(periods.get('week')),
         'month': _public(periods.get('month')),

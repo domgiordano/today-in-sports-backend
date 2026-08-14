@@ -13,6 +13,7 @@ invented.
 """
 
 import hashlib
+from lambdas.common.sources import nba_franchises
 
 CURRENT_YEAR = 2026
 
@@ -248,7 +249,7 @@ TEMPLATES = [
 ]
 
 
-def build_context(events):
+def build_context(events, franchises=None):
     """
     Real-name pools for distractors, gathered across the corpus.
 
@@ -281,6 +282,7 @@ def build_context(events):
             "f1_drivers": uniq(f1_drivers),
             "nfl_teams": uniq(nfl_teams),
             "nba_teams": uniq(nba_teams),
+            "nba_franchises": franchises or {},
             "soccer_clubs": uniq(soccer_clubs)}
 
 
@@ -310,21 +312,63 @@ def generate(events, ctx=None):
 #
 # After this date the modern name is the name it had. It sits after the last
 # identity change anyone has made - Charlotte took its name back in 2014.
-NBA_NAMES_RELIABLE_FROM = 2015
+# Superseded. The names come from the franchise histories now, so there is no
+# date before which basketball cannot be named - only clubs the source attaches
+# to a season the franchise did not play, which resolve to nothing and are left
+# unnamed exactly as before.
+NBA_NAMES_RELIABLE_FROM = None
 
 
-def _nba_can_name_clubs(event):
-    return int(event.get("year") or 0) >= NBA_NAMES_RELIABLE_FROM
+def _nba_season(event):
+    """The season a game belongs to, which is not always its calendar year."""
+    facts = event.get("facts") or {}
+    return int(facts.get("season") or event.get("year") or 0)
+
+
+def _nba_club(event, ctx, key):
+    """
+    What this club was called in this season, or None when that is unknowable.
+
+    None matters more than the name: balldontlie attaches the modern Denver
+    Nuggets to games from 1949, eighteen years before that franchise existed,
+    and inventing a name for those is the exact failure this replaced.
+    """
+    name = (event.get("facts") or {}).get(key)
+    if not name:
+        return None
+    return nba_franchises.team_name(ctx.get("nba_franchises") or {},
+                                    name, _nba_season(event), fallback=None)
+
+
+def _nba_pool(event, ctx, exclude, n=3):
+    """
+    Distractors under the names they carried that season.
+
+    An era-correct answer against a pool of modern names gives itself away:
+    "Seattle SuperSonics" beside three clubs that did not exist under those
+    names in 1988 is solvable without knowing anything about the game.
+    """
+    season = _nba_season(event)
+    index = ctx.get("nba_franchises") or {}
+    names = []
+    for modern in ctx.get("nba_teams", []):
+        era = nba_franchises.team_name(index, modern, season, fallback=None)
+        if era:
+            names.append(era)
+    return _pick(names, exclude, n)
 
 
 def nba_late_playoff_winner(event, ctx):
     if event["sport"] != "nba" or event["reason"] != "nba_late_playoff":
         return []
-    # The answer is a club name, so there is no wording that avoids the problem.
-    if not _nba_can_name_clubs(event):
-        return []
     f = event["facts"]
-    pool = _pick(ctx.get("nba_teams", []), {f["winningTeam"], f["losingTeam"]}, 3)
+    # The answer is a club name, so a season the source cannot place means no
+    # question at all rather than a question with a guessed answer.
+    winner = _nba_club(event, ctx, "winningTeam")
+    loser = _nba_club(event, ctx, "losingTeam")
+    if not winner:
+        return []
+    pool = _nba_pool(event, ctx, {winner, loser}, 3)
     if len(pool) < 3:
         return []
     # The free-tier payload never names the round, so this says "playoffs"
@@ -333,7 +377,7 @@ def nba_late_playoff_winner(event, ctx):
                f"In the {event['year']} NBA playoffs, a game on "
                f"{pretty_date(event['gameDate'])} finished "
                f"{f['winningScore']}-{f['losingScore']}. Who won it?",
-               f["winningTeam"], distractors=pool)]
+               winner, distractors=pool)]
 
 
 def nba_blowout_margin(event, ctx):
@@ -344,9 +388,11 @@ def nba_blowout_margin(event, ctx):
     margin = f.get("margin")
     if not margin:
         return []
-    if _nba_can_name_clubs(event):
-        prompt = (f"On {pretty_date(event['gameDate'])}, the {f['winningTeam']} "
-                  f"routed the {f['losingTeam']} {f['winningScore']}-"
+    winner = _nba_club(event, ctx, "winningTeam")
+    loser = _nba_club(event, ctx, "losingTeam")
+    if winner and loser:
+        prompt = (f"On {pretty_date(event['gameDate'])}, the {winner} "
+                  f"routed the {loser} {f['winningScore']}-"
                   f"{f['losingScore']}. What was the margin?")
     else:
         prompt = (f"On {pretty_date(event['gameDate'])}, an NBA game finished "
@@ -366,8 +412,10 @@ def nba_combined_points(event, ctx):
         return []
     low = event["reason"] == "nba_low_score"
     band = "low" if low else "high"
-    if _nba_can_name_clubs(event):
-        prompt = (f"The {f['winningTeam']} and {f['losingTeam']} met on "
+    winner = _nba_club(event, ctx, "winningTeam")
+    loser = _nba_club(event, ctx, "losingTeam")
+    if winner and loser:
+        prompt = (f"The {winner} and {loser} met on "
                   f"{pretty_date(event['gameDate'])} in a famously "
                   f"{band}-scoring game. How many points did the two teams "
                   f"score between them?")

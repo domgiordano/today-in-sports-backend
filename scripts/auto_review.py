@@ -55,22 +55,30 @@ MAX_PLAUSIBLE_COUNT = 1_000_000
 # January 20, 1953" names two cities neither club had reached, and nothing in
 # the payload could have said otherwise. Those stay a human's call until
 # there is a source that knows.
-SPORTS_WITHOUT_HISTORICAL_NAMES = ("nba",)
+# Sports whose source hands back today's franchise name whatever year is asked
+# for, with no era signal in the payload to correct it.
+#
+# Empty now. Basketball was the last one: balldontlie still returns the modern
+# name and the modern code for a 1953 game, but the franchise histories in
+# lambdas/common/sources/nba_franchises.py resolve it before a template ever
+# sees it, so a 1953 question names the Rochester Royals and a 1946 one names
+# the Toronto Huskies. A club the source attaches to a season its franchise did
+# not play resolves to nothing and is left unnamed, which is the same
+# conservative outcome the blunt year cutoff used to buy - except it now costs
+# 59 team references rather than most of the basketball inventory.
+SPORTS_WITHOUT_HISTORICAL_NAMES = ()
 
-# Before this, a modern franchise name may not be the name the club carried.
-#
-# This was 1980, on the assumption that relocations were a mid-century thing.
-# They are not: Seattle became Oklahoma City in 2008, New Jersey became
-# Brooklyn in 2012, Charlotte took its name back in 2014. 185 events named a
-# club under a name it did not yet have, and every one of them was after 1980
-# and so sailed straight past the flag - "the Oklahoma City Thunder routed the
-# LA Clippers" on a game played in 1988.
-#
-# The cutoff sits after the last identity change anyone has made, because a
-# year cutoff is the only rule available while the source gives no era signal
-# at all. It is blunt and it costs most of the basketball inventory to review
-# rather than auto-approval, which is the right side to be wrong on.
+# Kept for the flag below, which still fires for any sport added to the tuple
+# above before its history source exists.
 RELOCATION_ERA_BEFORE = 2015
+
+# A span that has not ended, as the franchise histories encode "present".
+OPEN_SEASON = 9999
+
+# An NBA season spans two calendar years, so a name that began with season N
+# legitimately appears on games played in calendar year N and N+1. Without this
+# every relocation flagged its own first winter.
+SEASON_GRACE = 1
 
 
 def _norm(text):
@@ -174,16 +182,84 @@ def flags_for(q):
     if q.get("isNegroLeagues"):
         problems.append("Negro Leagues - check the framing")
 
-    # Only when a club is actually named. The basketball templates now leave
-    # the clubs out for years the source cannot date - "two NBA teams met on
-    # January 20, 1953" asserts nothing about a city - so flagging by sport and
-    # year alone would hold back questions with no team name in them at all.
+    # Only when a club is actually named. A question that names none - "two NBA
+    # teams met on January 20, 1953" - asserts nothing about a city.
     if (q.get("sport") in SPORTS_WITHOUT_HISTORICAL_NAMES
             and int(q.get("year") or 0) < RELOCATION_ERA_BEFORE
             and _names_a_club(q)):
         problems.append("team name may be anachronistic - check the city")
 
+    # The same question asked of the data rather than of the calendar.
+    #
+    # This replaced a sport-and-year gate that held back every pre-2015
+    # basketball question because the source could not say what a club was
+    # called. The franchise histories can, so the check is now whether a name
+    # the question actually uses was in use that season - which catches the
+    # thing the gate was standing in for, and catches it in any year rather
+    # than only old ones.
+    stale = _anachronistic_clubs(q)
+    if stale:
+        problems.append(f"{stale[0]} did not carry that name in {q.get('year')}")
+
     return problems
+
+
+def _anachronistic_clubs(q, index=None):
+    """
+    Club names used before the franchise carried them.
+
+    Only current names are checked, and that is the point rather than a
+    shortcut. The failure this guards against is a *modern* name leaking into
+    an old question - the Oklahoma City Thunder in 1988 - because historical
+    names only ever appear when the resolution worked.
+
+    Checking historical names too produced two kinds of false alarm and no
+    extra catches. Names collide across franchises: the original Baltimore
+    Bullets folded in 1954 and the name was taken up by the club that became
+    the Wizards in 1963, so twenty-two correct questions about the first one
+    were flagged against the second one's dates. And an NBA season spans two
+    calendar years, so a January 1956 game belongs to the 1955 season and the
+    Milwaukee Hawks, which reads as an error against a calendar year alone -
+    hence the season of grace below.
+    """
+    index = index if index is not None else franchise_index()
+    if not index or q.get("sport") != "nba":
+        return []
+
+    year = int(q.get("year") or 0)
+    if not year:
+        return []
+
+    text = " ".join(str(v) for v in
+                    (q.get("prompt"), q.get("answer"), q.get("distractors"),
+                     q.get("clues"), q.get("items")) if v)
+
+    wrong = []
+    for spans in index.values():
+        current = [s for s in spans if int(s[2]) >= OPEN_SEASON]
+        if not current:
+            continue
+        name, first, _ = current[0]
+        if name in text and year < int(first) - SEASON_GRACE:
+            wrong.append(name)
+    return wrong
+
+
+_FRANCHISES = None
+
+
+def franchise_index():
+    """The NBA franchise histories, read from cache. Empty if unavailable."""
+    global _FRANCHISES
+    if _FRANCHISES is None:
+        try:
+            from lambdas.common.sources import nba_franchises
+            _FRANCHISES = nba_franchises.load(
+                os.environ.get("TIS_CACHE",
+                               os.path.expanduser("~/.cache/tis")))
+        except Exception:                              # noqa: BLE001
+            _FRANCHISES = {}
+    return _FRANCHISES
 
 
 # Clubs are named in the prompt, in the answer, or among the distractors. A

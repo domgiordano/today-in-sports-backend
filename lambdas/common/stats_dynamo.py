@@ -85,6 +85,34 @@ def list_scope(scope):
     return {row["period"]: row for row in resp.get("Items", [])}
 
 
+def list_regions(minimum_players=0):
+    """
+    Which regions have been rolled up, and how busy each is.
+
+    A scan, which is only defensible because this table holds one row per scope
+    per period rather than one per play — it is tens of rows, not millions, and
+    the alternative is keeping a second index of something already small.
+    """
+    out, last_key = [], None
+    while True:
+        kwargs = {"FilterExpression": Key("period").eq("all")}
+        if last_key:
+            kwargs["ExclusiveStartKey"] = last_key
+        resp = _table().scan(**kwargs)
+        for row in resp.get("Items", []):
+            scope = str(row.get("scope") or "")
+            if not scope.startswith("region#"):
+                continue
+            players = int(row.get("players") or 0)
+            if players < minimum_players:
+                continue
+            out.append({"country": scope.split("#", 1)[1], "players": players})
+        last_key = resp.get("LastEvaluatedKey")
+        if not last_key:
+            break
+    return sorted(out, key=lambda r: (-r["players"], r["country"]))
+
+
 def summarise(sessions):
     """
     Reduce a set of completed sessions to the numbers worth showing.
