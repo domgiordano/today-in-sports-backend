@@ -125,7 +125,16 @@ NEWSWORTHY = (
 # at Chelsea", which is exactly the kind of thing this source exists for.
 #
 # Over-filtering loses events silently. Under-filtering only costs scrolling.
-MIN_CANDIDATE_SCORE = 8
+#
+# Set above the results tier, though, and that is the one deliberate exclusion:
+# a match report is already covered by structured data that knows the score
+# exactly, and asking a person to hand-write "who won" from a newspaper is
+# paying the expensive path for something the cheap one does better. Across six
+# years of January-March that tier alone was 1,246 of 2,927 candidates.
+#
+# What is left is what no dataset has: sackings, bans, transfers, records and
+# injuries.
+MIN_CANDIDATE_SCORE = 16
 
 
 class SourceError(Exception):

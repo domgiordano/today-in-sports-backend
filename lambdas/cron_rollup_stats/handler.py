@@ -29,6 +29,10 @@ HANDLER = 'cron_rollup_stats'
 
 WINDOWS = {'week': 7, 'month': 30, 'all': None}
 
+# How many days of per-day rollups to keep for the trend line. Thirty is what a
+# chart can show without becoming a smear, and it is one query to read back.
+TREND_DAYS = 30
+
 _dynamo = None
 
 
@@ -77,6 +81,10 @@ def handler(event, context):
         stats_dynamo.put_rollup('global', period, stats_dynamo.summarise(window))
         written += 1
 
+    # One rollup per day, so a trend is a single query for the scope rather
+    # than thirty point reads or another scan.
+    written += _write_trend('global', sessions)
+
     # One scope per group. Groups are small and few; if that ever stops being
     # true this is the loop to bound.
     groups = _all_groups()
@@ -116,6 +124,26 @@ def handler(event, context):
         'countries': sorted(by_country),
         'rollups': written,
     })
+
+
+def _write_trend(scope, sessions):
+    """Per-day rollups for the trailing window, keyed `day#<yyyy-mm-dd>`."""
+    today = datetime.now(timezone.utc).date()
+    by_date = {}
+    for session in sessions:
+        date = session.get('quizDate') or ''
+        if date:
+            by_date.setdefault(date, []).append(session)
+
+    written = 0
+    for offset in range(TREND_DAYS):
+        date = (today - timedelta(days=offset)).isoformat()
+        # Written even when empty: a gap in the series is a real quiet day, and
+        # a missing key would be indistinguishable from one that never ran.
+        stats_dynamo.put_rollup(
+            scope, f'day#{date}', stats_dynamo.summarise(by_date.get(date, [])))
+        written += 1
+    return written
 
 
 def _all_groups():

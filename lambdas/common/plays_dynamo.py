@@ -192,8 +192,15 @@ def elapsed_since_served(session):
     return max(0.0, (_now() - started).total_seconds())
 
 
-def record_answer(identity, quiz_date, index, submitted, result):
-    """Append a graded answer and advance the running totals."""
+def record_answer(identity, quiz_date, index, submitted, result, sport=None):
+    """
+    Append a graded answer and advance the running totals.
+
+    `sport` is stored on the answer rather than looked up later. Accuracy per
+    sport is otherwise only recoverable by joining every answer back to its
+    question, which turns a nightly rollup into a fan-out of reads over the
+    whole question bank. One string a row buys that outright.
+    """
     entry = {
         "index": int(index),
         "submitted": str(submitted) if submitted is not None else None,
@@ -201,6 +208,7 @@ def record_answer(identity, quiz_date, index, submitted, result):
         "credit": str(result["credit"]),
         "points": int(result["points"]),
         "seconds": str(result["seconds"]) if result["seconds"] is not None else None,
+        "sport": str(sport) if sport else None,
         "answeredAt": _iso(_now()),
     }
 

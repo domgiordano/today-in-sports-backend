@@ -97,6 +97,7 @@ def summarise(sessions):
         return {
             "rounds": 0, "players": 0, "avgPoints": 0, "avgCorrect": 0,
             "perfectRounds": 0, "avgSeconds": 0, "bestPoints": 0,
+            "bySport": {},
         }
 
     points = [int(s.get("totalPoints") or 0) for s in completed]
@@ -118,4 +119,34 @@ def summarise(sessions):
         "perfectRounds": len([c for c in correct if c >= constants.QUIZ_LENGTH]),
         "avgSeconds": round(sum(seconds) / len(seconds), 1) if seconds else 0,
         "bestPoints": max(points),
+        "bySport": _by_sport(completed),
+    }
+
+
+def _by_sport(completed):
+    """
+    Accuracy per sport.
+
+    Answers recorded before `sport` was stored carry none, and are skipped
+    rather than bucketed under "unknown": a bucket that large would dominate
+    the chart and say nothing. It fills in as new rounds are played.
+    """
+    tally = {}
+    for session in completed:
+        for answer in session.get("answers") or []:
+            sport = answer.get("sport")
+            if not sport:
+                continue
+            bucket = tally.setdefault(sport, {"asked": 0, "correct": 0})
+            bucket["asked"] += 1
+            if answer.get("correct"):
+                bucket["correct"] += 1
+
+    return {
+        sport: {
+            **counts,
+            "accuracy": round(counts["correct"] / counts["asked"], 3),
+        }
+        for sport, counts in tally.items()
+        if counts["asked"]
     }

@@ -89,7 +89,9 @@ def handler(event, context):
     result = scoring.grade(question, body.get('answer'), seconds, used_hint,
                            taken_clues)
 
-    session = plays_dynamo.record_answer(identity, quiz_date, index, body.get('answer'), result)
+    session = plays_dynamo.record_answer(
+        identity, quiz_date, index, body.get('answer'), result,
+        sport=question.get('sport'))
 
     payload = {
         'quizDate': quiz_date,

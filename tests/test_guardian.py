@@ -146,7 +146,16 @@ class TestCandidateScore:
         both = g.candidate_score("Rovers sack manager and complete transfer")
         assert both == g.candidate_score("Rovers sack manager")
 
-    def test_a_low_scoring_result_still_reaches_the_queue(self):
-        # Over-filtering loses events silently; under-filtering costs
-        # scrolling. The bar sits at the weakest event class on purpose.
-        assert g.candidate_score("Bangladesh win by two wickets") >= g.MIN_CANDIDATE_SCORE
+    def test_a_match_report_does_not_reach_the_queue(self):
+        """
+        The one deliberate exclusion. Structured data already knows who won and
+        by how much, so asking a person to hand-write "who won" from a
+        newspaper pays the expensive path for what the cheap one does better.
+        Across six years of January-March that tier was 1,246 of 2,927.
+        """
+        assert g.candidate_score("Bangladesh win by two wickets") < g.MIN_CANDIDATE_SCORE
+
+    def test_an_injury_is_the_weakest_thing_that_does_reach_it(self):
+        # Everything above the results tier is something no dataset holds.
+        assert g.candidate_score(
+            "Gerrard out for a month after groin surgery") >= g.MIN_CANDIDATE_SCORE
