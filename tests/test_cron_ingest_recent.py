@@ -65,3 +65,15 @@ class _NullTable:
 
     def __exit__(self, *exc):
         return False
+
+
+def test_a_window_straddling_a_season_boundary_fetches_both():
+    """
+    Eight days in mid-August straddle the end of one soccer season and the
+    start of the next. Deriving one season from the newest day silently drops
+    everything on the other side, which reads as a quiet week rather than a bug.
+    """
+    days = ["2026-08-05", "2026-07-30", "2026-06-28"]
+    assert h._seasons_spanned(days, first_month=7) == [2026, 2025]
+    # A window well inside one season asks for one.
+    assert h._seasons_spanned(["2026-03-01", "2026-02-20"], 7) == [2025]

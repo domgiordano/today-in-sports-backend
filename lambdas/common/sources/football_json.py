@@ -24,6 +24,8 @@ import os
 import urllib.error
 import urllib.request
 
+from lambdas.common.logger import get_logger
+
 RAW = "https://raw.githubusercontent.com/openfootball/football.json/master"
 UA = "today-in-sports/0.1 (dominickj.giordano@gmail.com)"
 SOURCE_NAME = "football.json"
@@ -35,6 +37,8 @@ ATTRIBUTION = (
 
 # league file -> display name. Second tiers are included because they double
 # winter coverage at no extra cost.
+log = get_logger(__file__)
+
 LEAGUES = {
     "en.1": "English Premier League",
     "en.2": "English Championship",
@@ -79,9 +83,24 @@ def _fetch(season, league, cache_dir):
 
 
 def _full_time(match):
-    """Full-time score, or None if the match has no result."""
-    score = match.get("score") or {}
-    ft = score.get("ft")
+    """
+    Full-time score, or None if the match has no result.
+
+    Two shapes, and they appear in the same file. Most matches carry
+    `{"ft": [4, 2], "ht": [1, 0]}`; some carry a bare `[0, 0]`, which is the
+    full-time pair with no half-time split. In the 2025-26 Premier League
+    export that is 27 matches out of 380 - and calling .get on the bare form
+    raised AttributeError, which killed the league, which killed the season,
+    which is why recent soccer was empty everywhere.
+    """
+    score = match.get("score")
+    if isinstance(score, dict):
+        ft = score.get("ft")
+    elif isinstance(score, list):
+        ft = score
+    else:
+        return None
+
     if not ft or len(ft) != 2:
         return None
     try:
@@ -142,12 +161,22 @@ def fetch_league_season(season, league_code, cache_dir):
 
 
 def fetch_season(season, cache_dir, leagues=None):
-    """Every available league for a season."""
+    """
+    Every available league for a season.
+
+    Catches everything a league can throw, not only SourceError. A missing
+    league was always expected and handled; an unreadable one was not, and a
+    single malformed match in the English Premier League took the other nine
+    leagues down with it rather than costing its own.
+    """
     out = []
     for code in (leagues or LEAGUES):
         try:
             out.extend(fetch_league_season(season, code, cache_dir))
         except SourceError:
+            continue
+        except Exception as exc:                       # noqa: BLE001
+            log.warning(f"{code} {season}: {type(exc).__name__}: {exc}")
             continue
     return out
 

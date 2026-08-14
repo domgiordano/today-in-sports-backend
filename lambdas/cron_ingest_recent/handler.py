@@ -103,6 +103,18 @@ def _season_of(day, first_month):
     return d.year if d.month >= first_month else d.year - 1
 
 
+def _seasons_spanned(days, first_month):
+    """
+    Every season the window touches, newest first.
+
+    A window is not always inside one season. Eight days in mid-August straddle
+    the end of one soccer season and the start of the next, and deriving a
+    single season from the newest day silently drops everything on the other
+    side of the boundary - which looks like a quiet week rather than a bug.
+    """
+    return sorted({_season_of(d, first_month) for d in days}, reverse=True)
+
+
 def _recent(games, days):
     wanted = set(days)
     return [g for g in games if g.get("gameDate") in wanted]
@@ -115,9 +127,10 @@ def _ingest_nba(days):
     """
     if not days:
         return [], []
-    season = _season_of(max(days), first_month=10)
-    games = nba_src.fetch_season(season)
-    final = [g for g in _recent(games, days) if nba_src.is_final(g)]
+    final = []
+    for season in _seasons_spanned(days, first_month=10):
+        games = nba_src.fetch_season(season)
+        final.extend(g for g in _recent(games, days) if nba_src.is_final(g))
     return final, nba_nb.run(final)
 
 
@@ -129,18 +142,19 @@ def _ingest_soccer(days):
     """
     if not days:
         return [], []
-    start = _season_of(max(days), first_month=7)
-    # The export names most seasons "2024-25" but the current one plainly.
-    for label in (f"{start}-{str(start + 1)[2:]}", str(start)):
-        try:
-            games = soccer_src.fetch_season(label, CACHE_DIR)
-        except Exception as exc:                       # noqa: BLE001
-            log.warning(f"soccer {label}: {exc}")
-            continue
-        if games:
-            final = _recent(games, days)
-            return final, soccer_nb.run(final)
-    return [], []
+    final = []
+    for start in _seasons_spanned(days, first_month=7):
+        # The export names most seasons "2024-25" but the newest one plainly.
+        for label in (f"{start}-{str(start + 1)[2:]}", str(start)):
+            try:
+                games = soccer_src.fetch_season(label, CACHE_DIR)
+            except Exception as exc:                   # noqa: BLE001
+                log.warning(f"soccer {label}: {exc}")
+                continue
+            if games:
+                final.extend(_recent(games, days))
+                break
+    return final, soccer_nb.run(final)
 
 
 def _ingest_f1(days):
