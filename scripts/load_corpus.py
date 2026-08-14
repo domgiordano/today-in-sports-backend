@@ -266,46 +266,76 @@ def main():
                 print(f"  questions written: {written}", flush=True)
     print(f"questions written: {written}")
 
-    # Prune stale drafts.
+    # Prune superseded questions.
     #
     # Writing alone is not enough: when a fix stops a question being generated,
     # the old row survives. That is how two "the CL4 routed the Pittsburgh
-    # Alleghenys" questions outlived the team-code guard that was written to
-    # kill them.
+    # Alleghenys" questions outlived the team-code guard written to kill them.
     #
-    # Only `draft` rows are touched. Anything approved, rejected or used carries
-    # a human decision, and a reload has no business discarding that.
-    # Pruning is scoped to the sports this run actually rebuilt. The corpus file
-    # is often one sport - build_corpus.py emits MLB, and the winter sports come
-    # from their own ingest scripts - so an unscoped prune would treat every
-    # other sport's drafts as stale and delete inventory this run never had an
-    # opinion about.
+    # This used to touch `draft` rows only, on the reasoning that an approval is
+    # a human's and a reload has no business discarding it. That reasoning is
+    # wrong, and expensively so: it assumes the approved question still exists.
+    # When the generator changes, it does not - what survives is a row nothing
+    # can produce any more, carrying an approval for content no current rule
+    # endorses. 5,593 clue ladders reading "This happened in the 2000s. The
+    # sport was baseball. He signed as a free agent." sat approved and quiz-
+    # eligible for exactly this reason, long after the rewrite that made them
+    # impossible to generate.
+    #
+    # So `approved` is pruned too. Three exemptions, each for a real reason:
+    #
+    #   * `used` - a shipped quiz points at it, and deleting the row would
+    #     leave that quiz unresolvable. Reported instead, so somebody knows.
+    #   * `rejected` - a small deliberate record of a human's judgement, and
+    #     deleting it loses the reason without freeing anything that matters.
+    #   * anything with `authoredBy` - written by hand from a cited sentence.
+    #     No generator produces it, so "not regenerated" says nothing about it.
+    #
+    # Scoped to the sports this run rebuilt: the corpus file is often one sport,
+    # so an unscoped prune would treat every other sport as stale and delete
+    # inventory this run never had an opinion about.
     fresh_ids = {q["questionId"] for q in valid}
     rebuilt_sports = {q["sport"] for q in valid}
     print(f"pruning scoped to: {', '.join(sorted(rebuilt_sports))}")
 
-    stale, last_key = [], None
-    while True:
-        kwargs = {
-            "IndexName": constants.QUESTIONS_STATUS_INDEX,
-            "KeyConditionExpression": Key("status").eq("draft"),
-            "ProjectionExpression": "questionId, sport",
-        }
-        if last_key:
-            kwargs["ExclusiveStartKey"] = last_key
-        resp = questions_table.query(**kwargs)
-        stale.extend(i["questionId"] for i in resp.get("Items", [])
-                     if i["questionId"] not in fresh_ids
-                     and i.get("sport") in rebuilt_sports)
-        last_key = resp.get("LastEvaluatedKey")
-        if not last_key:
-            break
+    stale, shipped_but_stale, last_key = [], [], None
+    for status in ("draft", "approved", "used"):
+        last_key = None
+        while True:
+            kwargs = {
+                "IndexName": constants.QUESTIONS_STATUS_INDEX,
+                "KeyConditionExpression": Key("status").eq(status),
+                "ProjectionExpression": "questionId, sport, authoredBy",
+            }
+            if last_key:
+                kwargs["ExclusiveStartKey"] = last_key
+            resp = questions_table.query(**kwargs)
+            for item in resp.get("Items", []):
+                if item["questionId"] in fresh_ids:
+                    continue
+                if item.get("sport") not in rebuilt_sports:
+                    continue
+                if item.get("authoredBy"):
+                    continue
+                if status == "used":
+                    shipped_but_stale.append(item["questionId"])
+                else:
+                    stale.append(item["questionId"])
+            last_key = resp.get("LastEvaluatedKey")
+            if not last_key:
+                break
 
     if stale:
         with questions_table.batch_writer() as batch:
             for qid in stale:
                 batch.delete_item(Key={"questionId": qid})
-    print(f"stale drafts pruned: {len(stale)}")
+
+    if shipped_but_stale:
+        # Not deleted, but somebody has to know: these shipped and can no
+        # longer be regenerated, so whatever was wrong with them is already out.
+        print(f"WARNING: {len(shipped_but_stale)} already-used questions can no "
+              f"longer be generated and were left in place")
+    print(f"superseded questions pruned: {len(stale)}")
 
 
 if __name__ == "__main__":

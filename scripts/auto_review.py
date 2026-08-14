@@ -151,9 +151,17 @@ def flags_for(q):
     return problems
 
 
-def scan_drafts(table):
-    """Every draft question, paginated."""
-    out, last_key = [], None
+def iter_drafts(table):
+    """
+    Every draft question, a page at a time.
+
+    Deliberately a generator. The first version built one list of every draft
+    and the process was killed by the OOM reaper partway through a 24,000-row
+    bank - leaving 5,468 questions approved and the rest untouched, which is
+    the worst possible place to stop. Nothing here needs the whole set at once:
+    each question is judged on its own fields.
+    """
+    last_key = None
     while True:
         kwargs = {
             "IndexName": constants.QUESTIONS_STATUS_INDEX,
@@ -162,11 +170,11 @@ def scan_drafts(table):
         if last_key:
             kwargs["ExclusiveStartKey"] = last_key
         resp = table.query(**kwargs)
-        out.extend(resp.get("Items", []))
+        for item in resp.get("Items", []):
+            yield item
         last_key = resp.get("LastEvaluatedKey")
         if not last_key:
-            break
-    return out
+            return
 
 
 def main():
@@ -179,59 +187,68 @@ def main():
     dynamo = boto3.resource("dynamodb")
     table = dynamo.Table(constants.QUESTIONS_TABLE_NAME)
 
-    drafts = scan_drafts(table)
-    print(f"drafts: {len(drafts)}")
-
-    approve, flagged = [], []
+    # Decisions are made and written in one pass over the stream, so an
+    # interrupted run leaves a partially-reviewed bank rather than a half-built
+    # list and nothing written at all.
+    approved = flagged = seen = 0
     reasons = collections.Counter()
-    for q in drafts:
+    types = collections.Counter()
+    dates = set()
+    pending_flags = []
+
+    for q in iter_drafts(table):
+        seen += 1
         problems = flags_for(q)
+
         if problems:
-            flagged.append((q, problems))
+            flagged += 1
             for p in problems:
                 reasons[p] += 1
+            pending_flags.append((q["questionId"], problems))
         else:
-            approve.append(q)
+            if args.limit and approved >= args.limit:
+                continue
+            approved += 1
+            types[q["type"]] += 1
+            dates.add(q["mmdd"])
+            if args.apply:
+                table.update_item(
+                    Key={"questionId": q["questionId"]},
+                    UpdateExpression="SET #s = :s, reviewedBy = :who",
+                    ExpressionAttributeNames={"#s": "status"},
+                    ExpressionAttributeValues={":s": "approved",
+                                               ":who": "auto-review"},
+                )
+                if approved % 1000 == 0:
+                    print(f"  approved {approved}", flush=True)
 
-    if args.limit:
-        approve = approve[:args.limit]
+        if seen % 5000 == 0:
+            print(f"  scanned {seen}", flush=True)
 
-    print(f"  auto-approve : {len(approve)}")
-    print(f"  held for you : {len(flagged)}")
+    print(f"drafts scanned : {seen}")
+    print(f"  auto-approve : {approved}")
+    print(f"  held for you : {flagged}")
     print("\nwhy questions were held:")
     for reason, count in reasons.most_common():
         print(f"  {count:6d}  {reason}")
 
-    print("\napprovals by type:",
-          dict(collections.Counter(q["type"] for q in approve)))
-    print("dates covered   :", len({q["mmdd"] for q in approve}), "/ 366")
+    print("\napprovals by type:", dict(types))
+    print("dates covered   :", len(dates), "/ 366")
 
     if not args.apply:
         print("\ndry run - nothing written")
         return
 
-    written = 0
-    for q in approve:
-        table.update_item(
-            Key={"questionId": q["questionId"]},
-            UpdateExpression="SET #s = :s, reviewedBy = :who",
-            ExpressionAttributeNames={"#s": "status"},
-            ExpressionAttributeValues={":s": "approved", ":who": "auto-review"},
-        )
-        written += 1
-        if written % 500 == 0:
-            print(f"  approved {written}", flush=True)
-    print(f"approved: {written}")
-
     # Flags are written so the review queue can say why a question is waiting
     # rather than making someone work it out again.
-    for q, problems in flagged:
+    for question_id, problems in pending_flags:
         table.update_item(
-            Key={"questionId": q["questionId"]},
+            Key={"questionId": question_id},
             UpdateExpression="SET reviewFlags = :f",
             ExpressionAttributeValues={":f": problems},
         )
-    print(f"flagged for review: {len(flagged)}")
+    print(f"approved: {approved}")
+    print(f"flagged for review: {flagged}")
 
 
 if __name__ == "__main__":

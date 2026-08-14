@@ -39,12 +39,32 @@ def pretty_date(gd):
 
 
 def _qid(*parts):
-    return hashlib.sha1("|".join(str(p) for p in parts).encode()).hexdigest()[:16]
+    """
+    A question's identity.
+
+    The answer is part of it, and has to be. Several templates build a constant
+    prompt - every clue ladder reads "Who is this?" - so hashing only
+    (gameId, type, prompt) made the id a function of the game alone. Two players
+    who debuted in the same game collided, and one silently overwrote the other:
+    61 questions vanished on write, and which copy survived depended on
+    generation order, so an approved id could later come to mean a different
+    player entirely.
+    """
+    return hashlib.sha1("|".join(_part(p) for p in parts).encode()).hexdigest()[:16]
+
+
+def _part(value):
+    """Stable text for anything an answer might be: a string, list or dict."""
+    if isinstance(value, dict):
+        return ",".join(f"{k}={_part(v)}" for k, v in sorted(value.items()))
+    if isinstance(value, (list, tuple)):
+        return ",".join(_part(v) for v in value)
+    return str(value)
 
 
 def _q(event, qtype, prompt, answer, **kw):
     q = {
-        "questionId": _qid(event["gameId"], qtype, prompt),
+        "questionId": _qid(event["gameId"], qtype, prompt, answer),
         "type": qtype,
         "tier": tier_for(event["year"]),
         "prompt": prompt,
