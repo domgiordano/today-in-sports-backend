@@ -103,7 +103,10 @@ def handler(event, context):
     for offset in range(FIRST_PUBLISHABLE_OFFSET, horizon + 1):
         quiz_date = (today + timedelta(days=offset)).isoformat()
         quiz = quizzes_dynamo.get_quiz(quiz_date)
-        if quiz and quiz.get('status') != 'published':
+        # `held` is a veto somebody entered deliberately. Treating it as just
+        # another unpublished day would republish it the next morning, which
+        # is the whole thing the status exists to prevent.
+        if quiz and quiz.get('status') in ('draft', 'scheduled'):
             candidates.append(quiz)
 
     questions_by_id = questions_dynamo.get_many(

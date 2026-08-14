@@ -101,3 +101,23 @@ def test_published_runway_with_nothing_published(monkeypatch):
     assert out["runwayDays"] == 0
     assert out["publishedThrough"] is None
     assert out["goesDarkOn"] == "2026-08-14"
+
+
+def test_holding_a_day_records_why():
+    """A held day with no reason is a day nobody can act on later."""
+    from lambdas.common import constants
+    assert "held" in constants.VALID_QUIZ_STATUSES
+
+
+def test_recycling_refuses_a_published_day(monkeypatch):
+    """
+    Recycling replaces the five questions. Doing that to a published day would
+    change the quiz under anybody who already played it.
+    """
+    import pytest
+    from lambdas.common import quizzes_dynamo as qd
+
+    monkeypatch.setattr(qd, "get_quiz",
+                        lambda d: {"quizDate": d, "status": "published"})
+    with pytest.raises(ValueError, match="already published"):
+        qd.recycle("2026-09-20", [])

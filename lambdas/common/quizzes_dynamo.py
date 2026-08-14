@@ -86,7 +86,7 @@ def swap_question(quiz_date, index, question_id):
     return resp.get("Attributes")
 
 
-def set_status(quiz_date, status):
+def set_status(quiz_date, status, reason=None):
     if status not in constants.VALID_QUIZ_STATUSES:
         raise ValueError(f"invalid status: {status}")
 
@@ -106,6 +106,12 @@ def set_status(quiz_date, status):
     if status == "published":
         expr += ", publishedAt = :p"
         values[":p"] = _now()
+    if status == "held":
+        # Why a day was refused, kept on the row. A held day with no reason is
+        # a day nobody can act on later, including the person who held it.
+        expr += ", heldAt = :h, heldReason = :r"
+        values[":h"] = _now()
+        values[":r"] = reason or "no reason given"
 
     resp = _table().update_item(
         Key={"quizDate": quiz_date},
@@ -118,16 +124,45 @@ def set_status(quiz_date, status):
     return resp.get("Attributes")
 
 
+def recycle(quiz_date, questions, used_ids=None):
+    """
+    Reassemble a held day and return it to the queue.
+
+    A denial is usually about the questions rather than the date, so recycling
+    builds a fresh five from the bank and drops the day back to `draft`, where
+    the publisher will pick it up again. The previous set is not preserved -
+    it was refused.
+    """
+    from lambdas.common.assembler import assemble
+
+    quiz = get_quiz(quiz_date)
+    if not quiz:
+        raise ValueError(f"no quiz for {quiz_date}")
+    if quiz.get("status") == "published":
+        raise ValueError(f"{quiz_date} is already published")
+
+    rebuilt = assemble(quiz_date, questions, used_ids=used_ids)
+    item = dict(rebuilt)
+    item["status"] = "draft"
+    item["recycledFrom"] = quiz.get("questionIds") or []
+    item["recycledAt"] = _now()
+    item["updatedAt"] = _now()
+    _table().put_item(Item=item)
+    log.info(f"recycled {quiz_date}")
+    return item
+
+
 def published_runway(today=None):
     """
     How many consecutive days from today already have a published quiz.
 
     This is the number that decides whether the game is playable next month.
-    Assembly is monthly and automatic; publishing is deliberate and manual, so
-    the published run is always shorter than the assembled one and it is the
-    only one a player ever sees. `play_start` refuses anything not published,
-    which means the day after this run ends the app answers "no published quiz"
-    and there is no quiz at all.
+    `play_start` refuses anything not published, so the day after this run ends
+    the app answers "no published quiz" and there is no quiz at all.
+
+    `cron_publish_quizzes` keeps this ahead of the horizon on its own now, so a
+    short runway means something is wrong rather than that somebody forgot -
+    days held for review, or a bank too thin to assemble from.
 
     Counted as a run rather than a total: sixty published days with a hole on
     Tuesday is a dark Tuesday, and a count would report sixty.

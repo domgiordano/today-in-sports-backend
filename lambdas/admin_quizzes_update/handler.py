@@ -3,9 +3,16 @@ PATCH /admin/quizzes/{date} - swap a question or change status.
 
 Body: {"action": "swap", "index": 2, "questionId": "..."}
       {"action": "status", "status": "scheduled" | "published" | "draft"}
+      {"action": "hold", "reason": "too much baseball"}
+      {"action": "recycle"}
 
 Publishing marks every question in the quiz as used, so it can never resurface
 on this calendar date in a later year.
+
+`hold` and `recycle` are the two halves of denying a day. Publishing is
+automatic, so refusing one has to be a state the publisher can see - a denied
+day left as a draft is simply republished by the next morning's cron. `recycle`
+reassembles from the bank and returns the day to the queue.
 """
 
 from lambdas.common.admin import require_admin
@@ -51,6 +58,17 @@ def handler(event, context):
         if body['status'] == 'published':
             questions_dynamo.mark_used(item.get('questionIds') or [], quiz_date)
             log.info(f"published {quiz_date}, marked questions used")
+
+    elif action == 'hold':
+        item = quizzes_dynamo.set_status(
+            quiz_date, 'held', reason=body.get('reason'))
+        log.info(f"held {quiz_date}: {body.get('reason') or 'no reason given'}")
+
+    elif action == 'recycle':
+        approved = questions_dynamo.list_bank(status='approved', limit=100000)
+        item = quizzes_dynamo.recycle(
+            quiz_date, approved,
+            used_ids=quizzes_dynamo.used_question_ids(quiz_date[5:]))
 
     else:
         raise ValidationError(

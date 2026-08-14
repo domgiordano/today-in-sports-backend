@@ -55,4 +55,8 @@ DEFAULT_ASSEMBLE_DAYS = 30
 MAX_ASSEMBLE_DAYS = 90
 
 VALID_QUESTION_STATUSES = ("draft", "approved", "rejected", "used")
-VALID_QUIZ_STATUSES = ("draft", "scheduled", "published")
+# `held` is a veto, and it exists because publishing is automatic. A denied day
+# left as `draft` would simply be republished by the next morning's cron, so
+# refusing a day has to be a state the publisher can see rather than the absence
+# of one. Recycling reassembles the day and returns it to `draft`.
+VALID_QUIZ_STATUSES = ("draft", "scheduled", "published", "held")
