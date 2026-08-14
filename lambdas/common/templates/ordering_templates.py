@@ -117,8 +117,23 @@ def chronological(events, ctx=None):
 
     # Spread across the whole span rather than taking four adjacent years:
     # 1974/1975/1976/1977 is a memory test, 1918/1954/1986/2016 is a question.
+    #
+    # Within each band, prefer a kind of moment the question has not used yet.
+    # Every event of one reason shares a sentence pattern, so four debuts read
+    # as "X made his first appearance, beginning a career of 1637 starts across
+    # 14 seasons" four times with the nouns swapped - which is the whole of the
+    # "two items read almost identically" flag. Reasons vary far more than
+    # wording does, so choosing on reason fixes the wording for free.
     step = len(picked) / ORDER_ITEMS
-    chosen = [picked[int(i * step)] for i in range(ORDER_ITEMS)]
+    chosen, used_reasons = [], set()
+    for i in range(ORDER_ITEMS):
+        target = int(i * step)
+        band = range(target, max(target + 1, min(int((i + 1) * step),
+                                                 len(picked))))
+        index = next((j for j in band
+                      if picked[j].get("reason") not in used_reasons), target)
+        chosen.append(picked[index])
+        used_reasons.add(picked[index].get("reason"))
 
     labels = [_label(e) for e in chosen]
     if len(set(labels)) != len(labels):

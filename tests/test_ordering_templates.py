@@ -237,3 +237,31 @@ def test_a_date_mixing_integer_and_string_game_ids_does_not_crash():
     # produces is checked by the other tests here.
     out = tpl.chronological(events)
     assert isinstance(out, list)
+
+
+def test_four_moments_prefer_four_different_kinds_of_moment():
+    """
+    Every event of one reason shares a sentence pattern, so four debuts read as
+    the same sentence with the nouns swapped - which is what the "two items
+    read almost identically" flag was catching. Choosing on reason varies the
+    wording for free.
+    """
+    NAMES = {1950: "Al Rosen", 1960: "Ron Santo", 1970: "Thurman Munson",
+             1980: "Kirk Gibson", 1990: "Jeff Bagwell", 2000: "Barry Zito",
+             2010: "Buster Posey", 2020: "Kyle Lewis"}
+
+    # Two debuts sit in the first band; later bands offer alternatives.
+    events = [_event(y, title=f"{NAMES[y]} did something notable", reason=r)
+              for y, r in [(1950, "player_debut"), (1960, "player_debut"),
+                           (1970, "no_hitter"), (1980, "player_debut"),
+                           (1990, "star_trade"), (2000, "player_finale"),
+                           (2010, "player_debut"), (2020, "no_hitter")]]
+
+    out = tpl.chronological(events)
+    assert out, "a question should still be produced"
+
+    years = [s["year"] for s in out[0]["itemSources"]]
+    reasons = [e["reason"] for e in events if e["year"] in years]
+    assert len(set(reasons)) > 1, "all four items came from one reason"
+    # Chronological spread must survive the preference.
+    assert years == sorted(years)
