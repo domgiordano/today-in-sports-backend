@@ -54,13 +54,20 @@ def test_a_named_weekday_is_resolved_backwards():
         "2008-12-07T09:00:00Z", "beaten on Friday") == date(2008, 12, 5)
 
 
-def test_the_same_weekday_means_a_week_earlier():
+def test_the_same_weekday_is_declined_rather_than_guessed():
     """
-    "on Sunday" in a Sunday paper is last Sunday. Reading it as today would
-    file a week-old event on the wrong date and look entirely plausible.
+    "on Sunday" in a Sunday paper is genuinely ambiguous: print copy tends to
+    mean last Sunday, online copy updated through the day routinely means this
+    morning.
+
+    This used to assume a week back. Measured over a week of the real archive,
+    23% of all resolved candidates landed on that branch — a systematic error
+    putting questions on the wrong calendar date, invisible to anyone who did
+    not cross-check publication against event. Declining costs a quarter of the
+    yield and removes the only failure mode this source cannot survive.
     """
     assert g.resolve_event_date(
-        "2008-12-07T09:00:00Z", "the win on Sunday") == date(2008, 11, 30)
+        "2008-12-07T09:00:00Z", "the win on Sunday") is None
 
 
 def test_no_date_reference_returns_none_rather_than_guessing():

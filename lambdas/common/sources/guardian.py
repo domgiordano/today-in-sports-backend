@@ -141,8 +141,18 @@ def resolve_event_date(published, text):
     for index, day_name in enumerate(weekdays):
         if re.search(rf"\bon {day_name}\b", lowered):
             delta = (pub.weekday() - index) % 7
-            # "on Monday" published on a Monday means a week ago, not today.
-            return pub - timedelta(days=delta or 7)
+            if delta == 0:
+                # The named day is the day of publication, which is genuinely
+                # ambiguous: print copy tends to mean a week ago, online copy
+                # updated through the day routinely means this morning. This
+                # used to assume a week back, and 23% of a sample week landed
+                # there - a systematic error that puts a question on the wrong
+                # calendar date, which is the one thing this cannot survive.
+                #
+                # So it declines, which is what the rest of this function does
+                # whenever the text does not actually say.
+                return None
+            return pub - timedelta(days=delta)
 
     return None
 
