@@ -233,6 +233,7 @@ def main():
     print(f"events written: {written}")
 
     questions_table = dynamo.Table(constants.QUESTIONS_TABLE_NAME)
+    quizzes_table = dynamo.Table(constants.QUIZZES_TABLE_NAME)
 
     # Existing decisions, so a reload does not overwrite them.
     #
@@ -302,6 +303,28 @@ def main():
     # so an unscoped prune would treat every other sport as stale and delete
     # inventory this run never had an opinion about.
     fresh_ids = {q["questionId"] for q in valid}
+
+    # Anything a quiz points at, whatever its status.
+    #
+    # `used` was the only protection here, and it is not the same thing: a quiz
+    # scheduled for next month holds `approved` questions, so a rebuild that
+    # changed their ids - which this one did, because the id hashes the answer
+    # and "Keefe" became "Tim Keefe" - deleted the rows out from under nine
+    # quizzes, three of them already published. The quiz survives as a row and
+    # resolves to nothing, which is worse than either outcome.
+    scheduled_ids = set()
+    last_key = None
+    while True:
+        kwargs = {"ProjectionExpression": "questionIds"}
+        if last_key:
+            kwargs["ExclusiveStartKey"] = last_key
+        resp = quizzes_table.scan(**kwargs)
+        for item in resp.get("Items", []):
+            scheduled_ids.update(item.get("questionIds") or [])
+        last_key = resp.get("LastEvaluatedKey")
+        if not last_key:
+            break
+    print(f"questions referenced by a quiz: {len(scheduled_ids)}")
     rebuilt_sports = {q["sport"] for q in valid}
     print(f"pruning scoped to: {', '.join(sorted(rebuilt_sports))}")
 
@@ -323,6 +346,8 @@ def main():
                 if item.get("sport") not in rebuilt_sports:
                     continue
                 if item.get("authoredBy"):
+                    continue
+                if item["questionId"] in scheduled_ids:
                     continue
                 if status == "used":
                     shipped_but_stale.append(item["questionId"])
