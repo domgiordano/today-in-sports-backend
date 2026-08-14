@@ -16,6 +16,9 @@ from lambdas.common.logger import get_logger
 
 log = get_logger(__file__)
 
+# DynamoDB's own ceiling for one BatchGetItem call.
+BATCH_GET_LIMIT = 100
+
 _dynamo = None
 
 
@@ -150,6 +153,41 @@ def mark_used(question_ids, quiz_date):
             ExpressionAttributeValues={
                 ":used": "used", ":d": [quiz_date], ":empty": []},
         )
+
+
+def get_many(question_ids):
+    """
+    Fetch specific questions by id, as {id: question}.
+
+    Batched rather than scanned: the publisher checks a couple of hundred
+    questions against a bank of twenty-four thousand, and a scan to find them
+    reads the whole table every morning to look at one percent of it.
+
+    Ids that do not exist are simply absent from the result, which is the
+    signal the caller wants - a quiz pointing at a question that is gone must
+    not publish.
+    """
+    ids = list(dict.fromkeys(q for q in question_ids if q))
+    if not ids:
+        return {}
+
+    resource = _table().meta.client
+    out = {}
+    for start in range(0, len(ids), BATCH_GET_LIMIT):
+        chunk = ids[start:start + BATCH_GET_LIMIT]
+        request = {constants.QUESTIONS_TABLE_NAME: {
+            "Keys": [{"questionId": q} for q in chunk]}}
+
+        while request:
+            resp = resource.batch_get_item(RequestItems=request)
+            for item in resp.get("Responses", {}).get(
+                    constants.QUESTIONS_TABLE_NAME, []):
+                out[item["questionId"]] = item
+            # DynamoDB returns what it could not read rather than failing, and
+            # dropping those would look exactly like a deleted question.
+            request = resp.get("UnprocessedKeys") or None
+
+    return out
 
 
 def coverage_counts(status="approved"):
