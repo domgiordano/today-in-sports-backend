@@ -157,10 +157,35 @@ class TestNFL:
         assert e["facts"]["winningTeam"] == champion
         assert f"Super Bowl {number}" in e["title"]
 
-    def test_regular_season_game_is_not_notable(self, games):
+    def test_a_routine_regular_season_game_is_not_notable(self, games):
+        """
+        The bar for a regular-season game, now that there is one at all. A
+        close, ordinary scoreline is what most Sundays produce and it should
+        still pass unremarked.
+        """
         reg = [g for g in games if g["gameType"] == "REG"]
         assert reg, "fixture should include a control regular-season game"
-        assert nfl_nb.run(reg) == []
+
+        routine = dict(reg[0])
+        routine["away"] = dict(routine["away"], team="Buffalo Bills", score=17,
+                               isWinner=False)
+        routine["home"] = dict(routine["home"], team="Baltimore Ravens", score=24,
+                               isWinner=True)
+        routine.update(margin=7, combinedPoints=41, overtime=False)
+        assert nfl_nb.run([routine]) == []
+
+    def test_a_lopsided_regular_season_game_is_notable(self, games):
+        """
+        The fixture's control game is Ravens 47-3, a 44-point margin. It was
+        only ever a control because four of the five detectors required a
+        playoff game, so the entire regular season — 6,967 games — was
+        invisible. It is one of the most lopsided results in the dataset and
+        it should not be.
+        """
+        reg = [g for g in games if g["gameType"] == "REG"]
+        events = nfl_nb.run(reg)
+        assert events, "a 44-point regular-season margin should be notable"
+        assert events[0]["reason"] == "regular_season_blowout"
 
 
 # ------------------------------------------------------- cross-sport shape

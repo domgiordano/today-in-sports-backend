@@ -242,10 +242,95 @@ def nfl_playoff_overtime(event, ctx):
                f["winningTeam"], distractors=pool)]
 
 
+def nfl_shutout_winner(event, ctx):
+    if event["sport"] != "nfl" or event["reason"] != "shutout":
+        return []
+    f = event["facts"]
+    pool = _pick(ctx.get("nfl_teams", []), {f["winningTeam"], f["losingTeam"]}, 3)
+    if len(pool) < 3:
+        return []
+    return [_q(event, "mc",
+               f"On {pretty_date(event['gameDate'])} the {f['losingTeam']} were "
+               f"held scoreless. Who shut them out?",
+               f["winningTeam"], distractors=pool)]
+
+
+def nfl_blowout_margin(event, ctx):
+    if event["sport"] != "nfl" or event["reason"] != "regular_season_blowout":
+        return []
+    f = event["facts"]
+    n = f.get("margin")
+    if not n:
+        return []
+    return [_q(event, "numeric",
+               f"On {pretty_date(event['gameDate'])} the {f['winningTeam']} beat "
+               f"the {f['losingTeam']} {f['winningScore']}-{f['losingScore']}. "
+               f"By how many points?",
+               n, numericAnswer=n, tolerance=3)]
+
+
+def nfl_overtime_winner(event, ctx):
+    if event["sport"] != "nfl" or event["reason"] != "regular_season_overtime":
+        return []
+    f = event["facts"]
+    pool = _pick(ctx.get("nfl_teams", []), {f["winningTeam"], f["losingTeam"]}, 3)
+    if len(pool) < 3:
+        return []
+    return [_q(event, "mc",
+               f"A game on {pretty_date(event['gameDate'])} went to overtime. "
+               f"Who beat the {f['losingTeam']}?",
+               f["winningTeam"], distractors=pool)]
+
+
+def nfl_shootout_points(event, ctx):
+    if event["sport"] != "nfl" or event["reason"] != "regular_season_shootout":
+        return []
+    f = event["facts"]
+    n = f.get("combinedPoints")
+    if not n:
+        return []
+    return [_q(event, "numeric",
+               f"The {f['winningTeam']} and {f['losingTeam']} met on "
+               f"{pretty_date(event['gameDate'])} in one of the highest-scoring "
+               f"games of the era. How many points did the two of them manage "
+               f"between them?",
+               n, numericAnswer=n, tolerance=6)]
+
+
+def nfl_rock_fight_points(event, ctx):
+    if event["sport"] != "nfl" or event["reason"] != "rock_fight":
+        return []
+    f = event["facts"]
+    n = f.get("combinedPoints")
+    if n is None:
+        return []
+    return [_q(event, "numeric",
+               f"The {f['winningTeam']} and {f['losingTeam']} met on "
+               f"{pretty_date(event['gameDate'])} and barely troubled the "
+               f"scoreboard. How many points were scored in the whole game?",
+               n, numericAnswer=n, tolerance=2)]
+
+
+def nfl_one_point_winner(event, ctx):
+    if event["sport"] != "nfl" or event["reason"] != "one_point_game":
+        return []
+    f = event["facts"]
+    pool = _pick(ctx.get("nfl_teams", []), {f["winningTeam"], f["losingTeam"]}, 3)
+    if len(pool) < 3:
+        return []
+    return [_q(event, "mc",
+               f"On {pretty_date(event['gameDate'])} the {f['losingTeam']} lost "
+               f"by a single point, {f['winningScore']}-{f['losingScore']}. "
+               f"Who beat them?",
+               f["winningTeam"], distractors=pool)]
+
+
 TEMPLATES = [
     nhl_cup_winner, nhl_cup_series_length, nhl_playoff_overtime,
     f1_decider_winner, f1_first_win, f1_grid_position, f1_milestone,
     nfl_super_bowl_champion, nfl_super_bowl_score, nfl_playoff_overtime,
+    nfl_shutout_winner, nfl_blowout_margin, nfl_overtime_winner,
+    nfl_shootout_points, nfl_rock_fight_points, nfl_one_point_winner,
 ]
 
 
