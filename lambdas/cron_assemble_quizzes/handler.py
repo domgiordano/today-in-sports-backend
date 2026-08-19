@@ -16,6 +16,7 @@ from datetime import date, datetime, timedelta, timezone
 import boto3
 
 from lambdas.common import constants, questions_dynamo, quizzes_dynamo
+from lambdas.common import assembler
 from lambdas.common.assembler import assemble
 from lambdas.common.errors import handle_errors
 from lambdas.common.logger import get_logger
@@ -47,6 +48,7 @@ def handler(event, context):
     proposed = skipped = incomplete = 0
     thin_dates = []
     bank_seen = 0
+    openers = []
 
     for offset in range(days):
         quiz_date = (start + timedelta(days=offset)).isoformat()
@@ -69,7 +71,13 @@ def handler(event, context):
         bank_seen += len(day_bank)
 
         used = quizzes_dynamo.used_question_ids(quiz_date[5:])
-        result = assemble(quiz_date, day_bank, used_ids=used)
+        result = assemble(quiz_date, day_bank, used_ids=used,
+                          recent_openers=openers)
+        # Carried day to day so the opening question rotates across the run.
+        # Without this each date is assembled in isolation and every one of
+        # them reaches for the same strongest question, which is how the quiz
+        # came to open on a numeric prompt three mornings in four.
+        assembler.remember_opener(openers, result.questions)
         item = result.to_item()
 
         try:

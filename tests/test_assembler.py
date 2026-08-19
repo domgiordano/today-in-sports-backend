@@ -304,3 +304,195 @@ class TestLeapDay:
         result = assemble("2028-02-29", questions)
         assert all("_borrowed" not in q for q in questions)
         assert "questionIds" in result.to_item()
+
+
+def typed(qid, tier, sport, qtype, mmdd="08-13", score=80):
+    """A question with a chosen format, for the shape and rotation rules."""
+    item = q(qid, tier, sport, mmdd, score=score)
+    item["type"] = qtype
+    return item
+
+
+class TestOpeningQuestion:
+    """
+    Slot one used to be whatever tier 1 offered, and tier 1 covers 96 of 366
+    dates — so 72% of published quizzes opened with a numeric question and half
+    of them opened with the same sport. It is now chosen for rotation.
+    """
+
+    def _bank(self, mmdd):
+        # Every opener format available in several sports, plus the two heavy
+        # formats that should never be asked first.
+        bank = []
+        for i, (sport, qtype) in enumerate([
+            ("mlb", "numeric"), ("soccer", "mc"), ("nhl", "multi"),
+            ("f1", "numeric"), ("nba", "mc"), ("soccer", "multi"),
+        ]):
+            bank.append(typed(f"{mmdd}-o{i}", (i % 5) + 1, sport, qtype, mmdd))
+        bank.append(typed(f"{mmdd}-map", 1, "mlb", "map", mmdd, score=99))
+        bank.append(typed(f"{mmdd}-ord", 1, "nba", "ordering", mmdd, score=99))
+        return bank
+
+    def test_never_opens_on_a_format_that_must_be_learned_first(self):
+        """
+        A map or an ordering puzzle at question one asks the player to work out
+        the interface before answering anything. Both here outscore every
+        alternative on notability and must still lose the opening slot.
+        """
+        r = asm.assemble("2026-08-13", self._bank("08-13"))
+        assert r.questions[0]["type"] in asm.OPENER_TYPES
+
+    def test_consecutive_days_do_not_open_on_the_same_sport(self):
+        bank = self._bank("08-13") + self._bank("08-14") + self._bank("08-15")
+        results = asm.assemble_range(
+            ["2026-08-13", "2026-08-14", "2026-08-15"], bank)
+        openers = [r.questions[0]["sport"] for r in results]
+        assert len(set(openers)) == len(openers), openers
+
+    def test_consecutive_days_do_not_open_on_the_same_format(self):
+        bank = self._bank("08-13") + self._bank("08-14") + self._bank("08-15")
+        results = asm.assemble_range(
+            ["2026-08-13", "2026-08-14", "2026-08-15"], bank)
+        formats = [r.questions[0]["type"] for r in results]
+        assert len(set(formats)) == len(formats), formats
+
+    def test_rotation_carries_into_a_later_run(self):
+        """
+        A fresh assembly run must not repeat the format the previous run ended
+        on, or a week assembled on Monday opens the same way as the one before.
+        """
+        bank = self._bank("08-13")
+        seeded = asm.assemble("2026-08-13", bank,
+                              recent_openers=[("numeric", "mlb")])
+        assert seeded.questions[0]["type"] != "numeric"
+
+    def test_a_date_with_no_suitable_opener_still_produces_a_quiz(self):
+        """Rotation is a preference. It must not cost the day its quiz."""
+        bank = [typed(f"m{t}", t, "mlb", "map", "09-09") for t in range(1, 6)]
+        r = asm.assemble("2026-09-09", bank)
+        assert r.complete
+
+
+class TestSportCap:
+    """
+    The bank is 84% baseball because Retrosheet reaches 1871 while the other
+    sources start in the 1990s. Without a ceiling the deepest archive wins every
+    slot on merit.
+    """
+
+    def test_one_sport_cannot_take_the_whole_quiz_when_others_are_available(self):
+        bank = [typed(f"b{t}", t, "mlb", "mc", "08-13") for t in range(1, 6)]
+        bank += [typed(f"s{t}", t, "soccer", "numeric", "08-13") for t in range(1, 6)]
+        bank += [typed(f"n{t}", t, "nhl", "multi", "08-13") for t in range(1, 6)]
+        r = asm.assemble("2026-08-13", bank)
+        counts = collections.Counter(x["sport"] for x in r.questions)
+        assert counts["mlb"] <= asm.MAX_PER_SPORT
+
+    def test_a_single_sport_date_still_fills_and_says_so(self):
+        """Scarcity is a content problem to report, not a rule to fail on."""
+        bank = [typed(f"b{t}", t, "mlb", "mc", "08-13") for t in range(1, 6)]
+        r = asm.assemble("2026-08-13", bank)
+        assert r.complete
+        assert "sport-cap" in r.relaxed
+
+    def test_format_repetition_is_conceded_before_sport_balance(self):
+        """
+        A second numeric question is duller; a fourth baseball question is the
+        complaint players actually voice. Everything outside baseball here
+        shares one format, so filling the quiz means repeating that format —
+        and it should, rather than reaching for more mlb.
+
+        Three sports, because a cap of two per sport across five questions is
+        only satisfiable with three of them. Two sports and a cap of two is an
+        impossible ask, and the assembler is right to break it.
+        """
+        bank = [typed(f"b{t}", t, "mlb", "mc", "08-13") for t in range(1, 6)]
+        bank += [typed(f"s{i}", i + 1, "soccer", "numeric", "08-13") for i in range(3)]
+        bank += [typed(f"n{i}", i + 2, "nhl", "numeric", "08-13") for i in range(3)]
+        r = asm.assemble("2026-08-13", bank)
+        counts = collections.Counter(x["sport"] for x in r.questions)
+        assert counts["mlb"] <= asm.MAX_PER_SPORT
+        assert r.complete
+
+    def test_the_cap_is_only_broken_when_the_date_cannot_meet_it(self):
+        """
+        Two sports cannot fill five slots at two apiece. Breaking the cap is
+        correct there — what matters is that it is reported rather than passed
+        off as a balanced quiz.
+        """
+        bank = [typed(f"b{t}", t, "mlb", "mc", "08-13") for t in range(1, 6)]
+        bank += [typed(f"s{i}", 3, "soccer", "numeric", "08-13") for i in range(4)]
+        r = asm.assemble("2026-08-13", bank)
+        assert r.complete
+        assert "sport-cap" in r.relaxed
+
+
+class TestQuizShape:
+    def test_it_settles_on_a_few_formats_rather_than_a_new_one_each_time(self):
+        """
+        Five questions in five different interactions meant learning a new
+        control five times in three minutes. Content variety is the point;
+        interface variety is not.
+        """
+        bank = []
+        for i, t in enumerate(["mc", "numeric", "multi", "map", "ordering", "clue"]):
+            for tier in range(1, 6):
+                bank.append(typed(f"{t}{tier}", tier, ["mlb", "soccer", "nhl"][i % 3],
+                                  t, "08-13"))
+        r = asm.assemble("2026-08-13", bank)
+        assert len({x["type"] for x in r.questions}) <= asm.TARGET_DISTINCT_FORMATS + 1
+
+    def test_the_opener_stays_first_even_when_its_tier_would_not(self):
+        bank = [typed("late", 5, "soccer", "mc", "08-13", score=99)]
+        bank += [typed(f"m{t}", t, "mlb", "map", "08-13") for t in range(1, 5)]
+        r = asm.assemble("2026-08-13", bank)
+        assert r.questions[0]["questionId"] == "late"
+
+
+class TestReplacePublishedGuard:
+    """
+    The one path allowed to overwrite a published quiz. It is narrow on
+    purpose, so the guard is worth testing rather than trusting.
+    """
+
+    def _item(self, quiz_date):
+        return {"quizDate": quiz_date, "questionIds": ["a", "b", "c", "d", "e"]}
+
+    def test_it_refuses_a_day_that_is_being_played(self, monkeypatch):
+        """
+        Today is excluded on purpose: a quiz that changes under a player
+        part-way through their run is worse than a repetitive one.
+        """
+        from lambdas.common import quizzes_dynamo
+
+        with pytest.raises(ValueError, match="not in the future"):
+            quizzes_dynamo.replace_published(
+                self._item("2026-08-19"), today="2026-08-19")
+
+    def test_it_refuses_a_day_already_played(self):
+        from lambdas.common import quizzes_dynamo
+
+        with pytest.raises(ValueError, match="not in the future"):
+            quizzes_dynamo.replace_published(
+                self._item("2026-08-01"), today="2026-08-19")
+
+    def test_a_future_day_is_written_back_still_published(self, monkeypatch):
+        """
+        Rebuilt days must not drop to draft, or replacing them punches a hole
+        in the runway that decides whether the game is playable next month.
+        """
+        from lambdas.common import quizzes_dynamo
+
+        written = {}
+
+        class _T:
+            def put_item(self, Item):
+                written.update(Item)
+
+        monkeypatch.setattr(quizzes_dynamo, "_table", lambda: _T())
+        out = quizzes_dynamo.replace_published(
+            self._item("2026-09-30"), today="2026-08-19")
+
+        assert out["status"] == "published"
+        assert written["status"] == "published"
+        assert "rebuiltAt" in written

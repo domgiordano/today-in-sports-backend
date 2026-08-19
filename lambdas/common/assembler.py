@@ -47,9 +47,38 @@ TARGET_DISTINCT_SPORTS = 3
 # bank has the variety to support it.
 MAX_PER_TYPE = 2
 
+# How many distinct interaction formats a five-question quiz should aim for.
+#
+# Variety of content is the point of the game; variety of *interface* is not.
+# Chasing format freshness on every slot produced quizzes where all five
+# questions were a different interaction — type a name, pick four of eight, tap
+# a map, drag into order, work down a clue ladder — so the player learned a new
+# control five times in three minutes and never settled into playing. Three
+# formats gives the day a shape without making it monotonous.
+TARGET_DISTINCT_FORMATS = 3
+
 # Formats that work as a closer and read badly anywhere else: a clue ladder
 # opening a quiz gives away that clues exist before the player has settled in.
 CLOSER_TYPES = ("clue",)
+
+# Formats that make a good opening question: quick to read, answerable without
+# learning an interaction first. A map or an ordering puzzle at question one
+# asks the player to work out the interface before they have answered anything,
+# which is the wrong first impression of a game that takes three minutes.
+OPENER_TYPES = ("mc", "numeric", "multi")
+
+# How many previous days the opener rotation remembers. Long enough that a
+# format cannot come round twice in a week, short enough that a thin stretch of
+# calendar is not held to a rotation its inventory cannot serve.
+OPENER_MEMORY = 6
+
+# Most questions from one sport in a single quiz.
+#
+# The bank is 84% baseball, not because baseball matters more but because
+# Retrosheet reaches 1871 while the other sources start in the 1990s — roughly
+# fifty times the games to draw on. Without a ceiling the deepest archive wins
+# every slot on merit and the quiz becomes a baseball quiz.
+MAX_PER_SPORT = 2
 
 
 class AssemblyResult:
@@ -141,13 +170,19 @@ def _best(candidates, chosen_sports, chosen_types=None, prefer_new_sport=True):
 
     chosen_types = chosen_types or collections.Counter()
 
+    # Formats stop chasing freshness once the quiz has enough of them, and
+    # start preferring one already on the board. Without this the mix rule
+    # pulled the other way on every slot and guaranteed maximum churn.
+    want_new_format = len([t for t, n in chosen_types.items() if n]) < TARGET_DISTINCT_FORMATS
+
     def key(q):
         fresh_sport = q["sport"] not in chosen_sports
         fresh_type = chosen_types[q.get("type")] == 0
+        format_rank = (0 if fresh_type else 1) if want_new_format else (1 if fresh_type else 0)
         return (
             1 if q.get("_borrowed") else 0,
             0 if (prefer_new_sport and fresh_sport) else 1,
-            0 if fresh_type else 1,
+            format_rank,
             -(q.get("notabilityScore") or 0),
             q["questionId"],
         )
@@ -155,12 +190,68 @@ def _best(candidates, chosen_sports, chosen_types=None, prefer_new_sport=True):
     return sorted(candidates, key=key)[0]
 
 
-def assemble(quiz_date, questions, used_ids=None, mix=None):
+def _staleness(value, recent):
+    """
+    How long since `value` last opened a quiz, as a sortable number.
+
+    0 means it opened yesterday and 1 the day before, so a larger number is a
+    better opener. Anything not in memory sorts best of all.
+    """
+    try:
+        return recent.index(value)
+    except ValueError:
+        return len(recent) + 1
+
+
+def _pick_opener(pool, recent_openers, is_free):
+    """
+    Choose the question that opens the quiz.
+
+    Slot one used to be whatever tier 1 offered, and tier 1 covers 96 of 366
+    dates — so on three days in four the opener fell through to whatever tier 2
+    had most of, which is numeric. The result was 72% of published quizzes
+    opening with a number and half of them opening with the same sport. The
+    ladder is the format, but a ladder with nothing on its bottom rung is not
+    worth opening on.
+
+    So the opener is chosen for rotation first — a format and a sport that have
+    not opened recently — and tier is only a tiebreak. Everything after it still
+    ascends.
+    """
+    recent_types = [o[0] for o in (recent_openers or [])][:OPENER_MEMORY]
+    recent_sports = [o[1] for o in (recent_openers or [])][:OPENER_MEMORY]
+
+    cands = [q for q in pool if q.get("type") in OPENER_TYPES and is_free(q)]
+    if not cands:
+        # Nothing suitable: rather than force a map or a clue ladder into the
+        # opening slot, hand back nothing and let the tier pass fill it.
+        return None
+
+    def key(q):
+        # Sport before format. Both rotate, but "another baseball question" is
+        # the thing a player notices and says out loud, and with 84% of the
+        # bank in one sport it is also the one that needs the stronger push.
+        return (
+            1 if q.get("_borrowed") else 0,
+            -_staleness(q.get("sport"), recent_sports),
+            -_staleness(q.get("type"), recent_types),
+            int(q.get("tier") or 1),
+            -(q.get("notabilityScore") or 0),
+            q["questionId"],
+        )
+
+    return sorted(cands, key=key)[0]
+
+
+def assemble(quiz_date, questions, used_ids=None, mix=None, recent_openers=None):
     """
     Build one day's quiz.
 
     `quiz_date` is a UTC yyyy-mm-dd; the calendar key is its MM-DD. `used_ids`
     is every question already used on this calendar date in past years.
+    `recent_openers` is [(type, sport), ...] most recent first, from the days
+    immediately before this one, so the opening question can rotate rather than
+    landing on the same format every morning.
     """
     used_ids = set(used_ids or ())
     mix = mix or DEFAULT_MIX
@@ -189,7 +280,10 @@ def assemble(quiz_date, questions, used_ids=None, mix=None):
     for q in pool:
         by_tier[q["tier"]].append(q)
 
-    chosen, chosen_ids, chosen_sports = [], set(), set()
+    chosen, chosen_ids = [], set()
+    # A Counter, not a set: the mix wants to know how many baseball questions
+    # are already on the board, not merely that one is.
+    chosen_sports = collections.Counter()
     # Two questions from the same event must never share a quiz. They are
     # different questionIds, so id-deduping alone lets them through, and one
     # routinely answers the other: "Babe Ruth was sold to the New York Yankees,
@@ -202,7 +296,7 @@ def assemble(quiz_date, questions, used_ids=None, mix=None):
     def _take(q):
         chosen.append(q)
         chosen_ids.add(q["questionId"])
-        chosen_sports.add(q["sport"])
+        chosen_sports[q["sport"]] += 1
         chosen_types[q.get("type")] += 1
         # A missing id is not a shared id. Recording None would make every
         # question without provenance collide with every other one.
@@ -218,12 +312,29 @@ def assemble(quiz_date, questions, used_ids=None, mix=None):
     def _type_ok(q):
         return chosen_types[q.get("type")] < type_cap
 
+    # Held at two rather than scaled to the pool. An earlier version raised the
+    # cap whenever a date looked thin, which pre-emptively surrendered on dates
+    # that could in fact have met it — a third of quizzes came out with three
+    # or more baseball questions. The two-sweep fill below already relaxes the
+    # cap when a date genuinely cannot be filled, so the cap itself should not
+    # do that work a second time.
+    def _sport_ok(q):
+        return chosen_sports[q["sport"]] < MAX_PER_SPORT
+
+    # The opener is chosen before the ladder runs, because rotation matters
+    # more in slot one than the bottom rung of a ladder that is mostly empty.
+    opener = _pick_opener(pool, recent_openers, _free)
+    if opener:
+        _take(opener)
+
     # Pass 1 — one question per tier, preferring an unrepresented sport.
     for slot in mix:
         tier = slot["tier"]
+        if len(chosen) >= QUIZ_LENGTH:
+            break
         cands = [q for q in by_tier.get(tier, [])
                  if q["questionId"] not in chosen_ids and _free(q)
-                 and _type_ok(q)]
+                 and _type_ok(q) and _sport_ok(q)]
         pick = _best(cands, chosen_sports, chosen_types)
         if pick:
             _take(pick)
@@ -236,16 +347,26 @@ def assemble(quiz_date, questions, used_ids=None, mix=None):
         filled = 0
         over_type = 0
 
-        # Two sweeps: the first honours the format cap, the second ignores it.
-        # A quiz with three multiple-choice questions beats a four-question
-        # quiz, so the cap is a preference that yields, not a hard gate — but
-        # it only yields once the polite sweep has genuinely run out.
-        for honour_type_cap in (True, False):
+        over_sport = 0
+
+        # Three sweeps, giving up one constraint at a time in the order they
+        # are worth least. Format repetition is the cheapest thing to concede —
+        # a second ordering puzzle is duller, not unanswerable — so it yields
+        # before sport balance does. Conceding both at once, which is what this
+        # did originally, meant a date short of one format quietly bought a
+        # third and fourth baseball question it never needed.
+        sweeps = (
+            (True, True),    # everything honoured
+            (False, True),   # let the format repeat
+            (False, False),  # last resort: let one sport dominate
+        )
+        for honour_type_cap, honour_sport_cap in sweeps:
             while filled < missing:
                 cands = [q for q in pool
                          if q["questionId"] not in chosen_ids
                          and _free(q)
-                         and (not honour_type_cap or _type_ok(q))]
+                         and (not honour_type_cap or _type_ok(q))
+                         and (not honour_sport_cap or _sport_ok(q))]
                 if not cands:
                     break
 
@@ -255,8 +376,10 @@ def assemble(quiz_date, questions, used_ids=None, mix=None):
                 # - because the filler ignored the sport and format already on
                 # the board.
                 pick = _best(cands, chosen_sports, chosen_types)
-                if not honour_type_cap:
+                if not _type_ok(pick):
                     over_type += 1
+                if not _sport_ok(pick):
+                    over_sport += 1
                 _take(pick)
                 filled += 1
 
@@ -270,12 +393,27 @@ def assemble(quiz_date, questions, used_ids=None, mix=None):
             warnings.append(
                 f"{over_type} slot(s) exceeded the {MAX_PER_TYPE}-per-format "
                 f"cap; the bank for this date is short on format variety")
+        if over_sport:
+            relaxed.append("sport-cap")
+            warnings.append(
+                f"{over_sport} slot(s) exceeded the {MAX_PER_SPORT}-per-sport "
+                f"cap; this date has too little outside one sport")
 
-    # Tier order is the format, with one exception: a closer stays last even if
-    # its tier would place it earlier. A clue ladder opening the quiz gives away
-    # that clues exist before the player has settled into answering.
-    chosen.sort(key=lambda q: (q.get("type") in CLOSER_TYPES,
-                               q["tier"], q["questionId"]))
+    # The shape of the quiz: an on-ramp, a rising middle, a closer.
+    #
+    # Tier order is still the spine, with two questions pinned around it. The
+    # chosen opener stays first whatever its tier — it was picked to be an easy
+    # way in and rotated so today does not feel like yesterday — and a closer
+    # stays last even if its tier would place it earlier, because a clue ladder
+    # at question one gives away that clues exist before the player has settled
+    # into answering.
+    opener_id = opener["questionId"] if opener else None
+    chosen.sort(key=lambda q: (
+        0 if q["questionId"] == opener_id else 1,
+        q.get("type") in CLOSER_TYPES,
+        q["tier"],
+        q["questionId"],
+    ))
 
     if len(chosen) < QUIZ_LENGTH:
         warnings.append(
@@ -292,13 +430,48 @@ def assemble(quiz_date, questions, used_ids=None, mix=None):
     return AssemblyResult(quiz_date, chosen, warnings, relaxed)
 
 
-def assemble_range(dates, questions, used_by_mmdd=None):
-    """Assemble many days, sharing the bank. Used questions accumulate."""
+def opener_of(questions):
+    """
+    The (type, sport) pair identifying a quiz's opening question.
+
+    Callers that assemble a run of days keep a short list of these and hand it
+    back in, which is what makes the rotation work across a batch rather than
+    each date independently reaching for the same strongest question.
+    """
+    if not questions:
+        return None
+    first = questions[0]
+    return (first.get("type"), first.get("sport"))
+
+
+def remember_opener(openers, questions):
+    """Push this quiz's opener onto a rotation memory, oldest dropped."""
+    pair = opener_of(questions)
+    if pair:
+        openers.insert(0, pair)
+        del openers[OPENER_MEMORY:]
+    return openers
+
+
+def assemble_range(dates, questions, used_by_mmdd=None, recent_openers=None):
+    """
+    Assemble many days, sharing the bank. Used questions accumulate.
+
+    The opener rotation carries across the run, so a week assembled in one go
+    varies day to day rather than each date independently reaching for the same
+    strongest question. `recent_openers` seeds it with the days immediately
+    before `dates`, which is what stops a fresh run repeating the format the
+    last run ended on.
+    """
     used_by_mmdd = used_by_mmdd or {}
+    openers = list(recent_openers or [])
     results = []
     for d in dates:
         mmdd = d[5:]
-        results.append(assemble(d, questions, used_by_mmdd.get(mmdd, set())))
+        result = assemble(d, questions, used_by_mmdd.get(mmdd, set()),
+                          recent_openers=openers)
+        remember_opener(openers, result.questions)
+        results.append(result)
     return results
 
 

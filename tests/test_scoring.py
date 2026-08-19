@@ -275,6 +275,16 @@ class TestMapCredit:
     def test_landing_on_the_venue_is_full_credit(self):
         assert scoring.map_credit(self.MONZA, self.MONZA) == 1.0
 
+    def test_a_tap_within_screen_resolution_is_full_credit(self):
+        """
+        The regression this replaced. Full credit needed 50km, but the map
+        opens on the whole world at ~78km per pixel — so the target was smaller
+        than one pixel and a player who tapped the right city was marked down
+        by the resolution of their own screen rather than by their aim.
+        """
+        one_pixel_out = {"lat": self.MONZA["lat"] + 0.9, "lng": self.MONZA["lng"]}
+        assert scoring.map_credit(self.MONZA, one_pixel_out) == 1.0
+
     def test_the_right_city_is_full_credit(self):
         """Milan is ~15km from Monza. Nobody should lose points for that."""
         assert scoring.map_credit(self.MONZA, {"lat": 45.46, "lng": 9.19}) == 1.0
@@ -320,8 +330,8 @@ class TestMapCredit:
 
 class TestMultiCredit:
     """
-    Pick four of eight. The arithmetic exists to close off one strategy:
-    selecting everything.
+    Pick four of eight. Credit is how many you found; the cap is enforced
+    rather than paid for.
     """
 
     ANSWER = ["a", "b", "c", "d"]
@@ -329,31 +339,47 @@ class TestMultiCredit:
     def test_all_four_right_is_full_credit(self):
         assert scoring.multi_credit(self.ANSWER, ["a", "b", "c", "d"]) == 1.0
 
-    def test_picking_everything_earns_nothing(self):
+    def test_picking_everything_cannot_buy_a_perfect_score(self):
         """
-        Four hits and four misses. Rewarding hits alone would make this a
-        perfect score and the format a button press.
+        The strategy the arithmetic exists to close off. Only the first four
+        picks count, so selecting all eight is not a way to score full marks.
         """
         everything = ["a", "b", "c", "d", "e", "f", "g", "h"]
-        assert scoring.multi_credit(self.ANSWER, everything) == 0.0
+        assert scoring.multi_credit(self.ANSWER, everything, 4) < 1.0
 
-    def test_a_partial_answer_still_scores(self):
-        # Three right, one wrong: (3 - 1) / 4.
-        assert scoring.multi_credit(self.ANSWER, ["a", "b", "c", "e"]) == 0.5
+    def test_half_right_earns_half(self):
+        """
+        The regression this replaced: with picks already capped at four, two
+        right and two wrong scored zero — telling a player who knew half the
+        answer that they knew none of it.
+        """
+        assert scoring.multi_credit(self.ANSWER, ["a", "b", "x", "y"]) == 0.5
 
-    def test_more_wrong_than_right_is_floored_at_zero(self):
-        assert scoring.multi_credit(self.ANSWER, ["a", "e", "f", "g"]) == 0.0
+    def test_one_right_still_scores(self):
+        assert scoring.multi_credit(self.ANSWER, ["a", "x", "y", "z"]) == 0.25
+
+    def test_three_right_scores_three_quarters(self):
+        assert scoring.multi_credit(self.ANSWER, ["a", "b", "c", "e"]) == 0.75
 
     def test_picking_nothing_earns_nothing(self):
         assert scoring.multi_credit(self.ANSWER, []) == 0.0
 
-    def test_a_cautious_correct_answer_beats_a_reckless_one(self):
-        careful = scoring.multi_credit(self.ANSWER, ["a", "b"])
-        reckless = scoring.multi_credit(self.ANSWER, ["a", "b", "e", "f"])
-        assert careful > reckless
+    def test_naming_only_what_you_know_is_never_punished(self):
+        """
+        Two sure picks are worth the two names they got, whether or not the
+        player filled the remaining slots with guesses.
+        """
+        assert scoring.multi_credit(self.ANSWER, ["a", "b"]) == 0.5
+
+    def test_duplicate_picks_count_once_and_do_not_use_up_the_cap(self):
+        assert scoring.multi_credit(self.ANSWER, ["a", "a", "b", "b"], 4) == 0.5
 
     def test_only_a_complete_answer_counts_as_correct(self):
-        q = {"type": "multi", "tier": 4, "answer": self.ANSWER}
+        q = {"type": "multi", "tier": 4, "answer": self.ANSWER, "chooseCount": 4}
         assert scoring.grade(q, ["a", "b", "c", "d"], 5.0)["correct"] is True
         assert scoring.grade(q, ["a", "b", "c"], 5.0)["correct"] is False
         assert scoring.grade(q, ["a", "b", "c"], 5.0)["points"] > 0
+
+    def test_a_half_right_answer_is_worth_points_not_zero(self):
+        q = {"type": "multi", "tier": 4, "answer": self.ANSWER, "chooseCount": 4}
+        assert scoring.grade(q, ["a", "b", "x", "y"], 5.0)["points"] > 0

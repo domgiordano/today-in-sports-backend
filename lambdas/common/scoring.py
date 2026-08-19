@@ -53,9 +53,16 @@ HINT_CREDIT = 0.6
 CLUE_FLOOR = 0.25
 
 # Map questions. Full credit for landing within this many kilometres of the
-# venue - roughly "the right city" - falling away to nothing at the far bound.
-# A continental-scale miss should be worth zero, not a consolation.
-MAP_FULL_CREDIT_KM = 50.0
+# venue - roughly "the right metro area" - falling away to nothing at the far
+# bound. A continental-scale miss should be worth zero, not a consolation.
+#
+# 150km, not the 50km this shipped with, because 50 was unreachable rather than
+# demanding: the map opens on the whole world at about 78km per pixel, so the
+# full-credit target was two thirds of one pixel wide. A player who tapped the
+# right city was scored as near-miss by the resolution of their own screen. The
+# refine-on-tap zoom added alongside this is what makes even 150km a matter of
+# aim rather than luck.
+MAP_FULL_CREDIT_KM = 150.0
 MAP_ZERO_AT_KM = 2000.0
 
 
@@ -152,17 +159,22 @@ def map_credit(answer, submitted):
     return max(0.0, 1.0 - (distance - MAP_FULL_CREDIT_KM) / span)
 
 
-def multi_credit(answer, submitted):
+def multi_credit(answer, submitted, choose_count=None):
     """
-    Fraction earned by a pick-four-of-eight, with wrong picks subtracting.
+    Fraction earned by a pick-four-of-eight: how many of the names you found.
 
-    Rewarding hits alone would make selecting all eight a perfect score, which
-    turns the format into a button press. Each wrong pick cancels a right one,
-    so a shotgun answer earns nothing and a genuinely partial answer still
-    scores.
+    Credit was previously (hits - misses), which sounds even-handed and is not.
+    Picks are already capped at four by the UI, so the only answers that
+    arithmetic could reach were honest ones: two right and two wrong scored
+    zero, telling a player who knew half the answer that they knew none of it.
 
-    Selecting more than the question asked for is not a smarter strategy - it
-    is the strategy this arithmetic exists to close off.
+    The strategy it was aimed at — select everything, collect full marks — is
+    closed off here instead, by refusing an over-long answer rather than
+    grading it. That is enforcement, and it belongs at the door: the UI already
+    declines the fifth tap, and a payload carrying more than the question asked
+    for did not come from the UI. Truncating instead would have been worse than
+    useless, since a client that sent all eight with the right four first would
+    have kept full credit.
     """
     if not isinstance(answer, (list, tuple)) or not answer:
         return 0.0
@@ -170,12 +182,14 @@ def multi_credit(answer, submitted):
         return 0.0
 
     correct = {str(a) for a in answer}
+    limit = int(choose_count) if choose_count else len(correct)
+
+    # Deduplicated first, so the same name twice is a slip rather than a breach.
     picked = {str(s) for s in submitted}
+    if len(picked) > limit:
+        return 0.0
 
-    hits = len(picked & correct)
-    misses = len(picked - correct)
-
-    return max(0.0, (hits - misses) / len(correct))
+    return len(picked & correct) / len(correct)
 
 
 def ordering_credit(answer, submitted):
@@ -241,7 +255,8 @@ def grade(question, submitted, seconds, hint_used=False, clues_taken=0):
     qtype = question.get("type")
 
     if qtype == "multi":
-        credit = multi_credit(question.get("answer"), submitted)
+        credit = multi_credit(
+            question.get("answer"), submitted, question.get("chooseCount"))
         correct = credit >= 1.0
     elif qtype == "map":
         credit = map_credit(question.get("answer"), submitted)
