@@ -60,9 +60,6 @@ def handler(event, context):
     # changes under a player mid-run is worse than a repetitive one.
     rebuild_published = bool(body.get('rebuildPublished'))
 
-    # Pull the approved bank once; every day draws from the same inventory.
-    bank = questions_dynamo.list_bank('approved', limit=1000)
-
     proposed, skipped, rebuilt = [], [], []
     openers = []
     for offset in range(days):
@@ -75,6 +72,11 @@ def handler(event, context):
                 continue
             rebuilt.append(d)
 
+        # Fetched per date, not sliced off a global bank — the same fix the
+        # cron handler already carries. A flat 1,000-row slice of a 25,000
+        # question bank holds almost nothing for any particular calendar day,
+        # so every quiz came out thin and single-sported for no visible reason.
+        bank, _ = questions_dynamo.list_by_status('approved', d[5:], limit=200)
         used = quizzes_dynamo.used_question_ids(d[5:])
         result = assemble(d, bank, used_ids=used, recent_openers=openers)
         # See the cron handler: the rotation only works if it is carried.
