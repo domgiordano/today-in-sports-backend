@@ -47,6 +47,11 @@ TARGET_DISTINCT_SPORTS = 3
 # bank has the variety to support it.
 MAX_PER_TYPE = 2
 
+# A closer is a closer. Two clue ladders in one quiz means two questions whose
+# prompts both read "Who is this?", which is the most literal repetition the
+# game can produce and was shipping daily.
+MAX_CLOSERS = 1
+
 # How many distinct interaction formats a five-question quiz should aim for.
 #
 # Variety of content is the point of the game; variety of *interface* is not.
@@ -150,7 +155,8 @@ def _eligible(questions, mmdd, used_ids):
             and q["questionId"] not in used_ids]
 
 
-def _best(candidates, chosen_sports, chosen_types=None, prefer_new_sport=True):
+def _best(candidates, chosen_sports, chosen_types=None, prefer_new_sport=True,
+          chosen_pairs=None):
     """
     Pick the strongest candidate, preferring an unrepresented sport and format.
 
@@ -169,6 +175,7 @@ def _best(candidates, chosen_sports, chosen_types=None, prefer_new_sport=True):
         return None
 
     chosen_types = chosen_types or collections.Counter()
+    chosen_pairs = chosen_pairs or collections.Counter()
 
     # Formats stop chasing freshness once the quiz has enough of them, and
     # start preferring one already on the board. Without this the mix rule
@@ -179,10 +186,16 @@ def _best(candidates, chosen_sports, chosen_types=None, prefer_new_sport=True):
         fresh_sport = q["sport"] not in chosen_sports
         fresh_type = chosen_types[q.get("type")] == 0
         format_rank = (0 if fresh_type else 1) if want_new_format else (1 if fresh_type else 0)
+        # Two questions sharing a sport *and* a format are the same question
+        # twice — two German second division scorelines, one after the other.
+        # Ranked below everything except raw notability so it is avoided
+        # wherever the date has anything else to offer.
+        repeat_pair = chosen_pairs[(q["sport"], q.get("type"))] > 0
         return (
             1 if q.get("_borrowed") else 0,
             0 if (prefer_new_sport and fresh_sport) else 1,
             format_rank,
+            1 if repeat_pair else 0,
             -(q.get("notabilityScore") or 0),
             q["questionId"],
         )
@@ -292,12 +305,14 @@ def assemble(quiz_date, questions, used_ids=None, mix=None, recent_openers=None)
     chosen_events = set()
 
     chosen_types = collections.Counter()
+    chosen_pairs = collections.Counter()
 
     def _take(q):
         chosen.append(q)
         chosen_ids.add(q["questionId"])
         chosen_sports[q["sport"]] += 1
         chosen_types[q.get("type")] += 1
+        chosen_pairs[(q["sport"], q.get("type"))] += 1
         # A missing id is not a shared id. Recording None would make every
         # question without provenance collide with every other one.
         if q.get("sourceEventId"):
@@ -321,6 +336,17 @@ def assemble(quiz_date, questions, used_ids=None, mix=None, recent_openers=None)
     def _sport_ok(q):
         return chosen_sports[q["sport"]] < MAX_PER_SPORT
 
+    def _pair_ok(q):
+        """
+        A closer may appear once. Everything else is a preference rather than a
+        gate — see `_best`, which ranks a repeated sport-and-format pairing last
+        without refusing it, because refusing it outright fought the format
+        settling and pushed every quiz back to five different interactions.
+        """
+        if q.get("type") in CLOSER_TYPES:
+            return chosen_types[q.get("type")] < MAX_CLOSERS
+        return True
+
     # The opener is chosen before the ladder runs, because rotation matters
     # more in slot one than the bottom rung of a ladder that is mostly empty.
     opener = _pick_opener(pool, recent_openers, _free)
@@ -334,8 +360,8 @@ def assemble(quiz_date, questions, used_ids=None, mix=None, recent_openers=None)
             break
         cands = [q for q in by_tier.get(tier, [])
                  if q["questionId"] not in chosen_ids and _free(q)
-                 and _type_ok(q) and _sport_ok(q)]
-        pick = _best(cands, chosen_sports, chosen_types)
+                 and _type_ok(q) and _sport_ok(q) and _pair_ok(q)]
+        pick = _best(cands, chosen_sports, chosen_types, chosen_pairs=chosen_pairs)
         if pick:
             _take(pick)
 
@@ -356,17 +382,19 @@ def assemble(quiz_date, questions, used_ids=None, mix=None, recent_openers=None)
         # did originally, meant a date short of one format quietly bought a
         # third and fourth baseball question it never needed.
         sweeps = (
-            (True, True),    # everything honoured
-            (False, True),   # let the format repeat
-            (False, False),  # last resort: let one sport dominate
+            (True, True, True),     # everything honoured
+            (True, True, False),    # let a sport-and-format pairing repeat
+            (False, True, False),   # let the format repeat
+            (False, False, False),  # last resort: let one sport dominate
         )
-        for honour_type_cap, honour_sport_cap in sweeps:
+        for honour_type_cap, honour_sport_cap, honour_pair in sweeps:
             while filled < missing:
                 cands = [q for q in pool
                          if q["questionId"] not in chosen_ids
                          and _free(q)
                          and (not honour_type_cap or _type_ok(q))
-                         and (not honour_sport_cap or _sport_ok(q))]
+                         and (not honour_sport_cap or _sport_ok(q))
+                         and (not honour_pair or _pair_ok(q))]
                 if not cands:
                     break
 
@@ -375,7 +403,7 @@ def assemble(quiz_date, questions, used_ids=None, mix=None, recent_openers=None)
                 # identical prompts in them - back-to-back Eredivisie scorelines
                 # - because the filler ignored the sport and format already on
                 # the board.
-                pick = _best(cands, chosen_sports, chosen_types)
+                pick = _best(cands, chosen_sports, chosen_types, chosen_pairs=chosen_pairs)
                 if not _type_ok(pick):
                     over_type += 1
                 if not _sport_ok(pick):
