@@ -65,6 +65,40 @@ def put_draft(item):
     return item
 
 
+def replace_published(item, today=None):
+    """
+    Overwrite a published quiz for a future date, deliberately.
+
+    `put_draft` refuses this and should keep refusing it — it protects every
+    other caller from clobbering a signed-off day by accident. This is the one
+    path allowed to do it, and it is narrow on purpose:
+
+      * future dates only. A quiz that changes under a player part-way through
+        their run is worse than a repetitive one, so today and the past are
+        refused outright.
+      * it stays published, so replacing a day does not punch a hole in the
+        runway `published_runway` measures.
+
+    It exists because these days are published by cron rather than by a human,
+    so an assembly change would otherwise take the whole publish runway to
+    reach anybody.
+    """
+    quiz_date = item["quizDate"]
+    today = today or date.today().isoformat()
+    if quiz_date <= today:
+        raise ValueError(
+            f"{quiz_date} is not in the future; a published day that is being "
+            "played must not change underneath it")
+
+    item = dict(item)
+    item["status"] = "published"
+    item["rebuiltAt"] = _now()
+    item["updatedAt"] = _now()
+    _table().put_item(Item=item)
+    log.info(f"rebuilt published quiz {quiz_date}")
+    return item
+
+
 def swap_question(quiz_date, index, question_id):
     quiz = get_quiz(quiz_date)
     if not quiz:
