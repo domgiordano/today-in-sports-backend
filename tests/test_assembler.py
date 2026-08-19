@@ -496,3 +496,46 @@ class TestReplacePublishedGuard:
         assert out["status"] == "published"
         assert written["status"] == "published"
         assert "rebuiltAt" in written
+
+
+class TestNoDuplicateQuestionShapes:
+    """
+    Settling the format mix made a second kind of repetition visible: a quiz
+    can hold three formats and still ask the same question twice.
+    """
+
+    def test_only_one_clue_ladder_per_quiz(self):
+        """
+        Two clue ladders means two questions whose prompts both read "Who is
+        this?", which is the most literal repetition the game can produce.
+        """
+        bank = [typed(f"c{t}", t, "mlb", "clue", "08-13") for t in range(1, 6)]
+        bank += [typed(f"m{t}", t, "soccer", "mc", "08-13") for t in range(1, 6)]
+        bank += [typed(f"n{t}", t, "nhl", "numeric", "08-13") for t in range(1, 6)]
+        r = asm.assemble("2026-08-13", bank)
+        clues = [x for x in r.questions if x["type"] == "clue"]
+        assert len(clues) <= asm.MAX_CLOSERS
+
+    def test_it_avoids_two_questions_of_the_same_sport_and_format(self):
+        """
+        Two soccer numeric questions are the same question twice — the live
+        symptom was two German second division scorelines back to back.
+
+        Each sport offers two formats here, so five slots can be filled without
+        doubling a pairing. With only one format on offer a repeat is forced,
+        which is why this is a preference and not a gate.
+        """
+        bank = []
+        for sport in ("soccer", "mlb", "nhl"):
+            for t in range(1, 6):
+                bank.append(typed(f"{sport}n{t}", t, sport, "numeric", "08-13"))
+                bank.append(typed(f"{sport}m{t}", t, sport, "mc", "08-13"))
+        r = asm.assemble("2026-08-13", bank)
+        pairs = collections.Counter((x["sport"], x["type"]) for x in r.questions)
+        assert max(pairs.values()) == 1, pairs
+
+    def test_a_repeat_is_still_taken_over_a_short_quiz(self):
+        """The pairing rule is a preference. It must not cost the day a slot."""
+        bank = [typed(f"s{t}", t, "soccer", "numeric", "08-13") for t in range(1, 6)]
+        r = asm.assemble("2026-08-13", bank)
+        assert r.complete
