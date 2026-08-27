@@ -345,18 +345,30 @@ def assemble(quiz_date, questions, used_ids=None, mix=None, recent_openers=None)
     def _sport_ok(q):
         return chosen_sports[q["sport"]] < MAX_PER_SPORT
 
+    def _once_only(q):
+        """
+        Formats a quiz may hold exactly one of, whatever else is scarce.
+
+        Both earn their slot by being unlike the rest of the quiz — a clue
+        ladder because it is the closer, a map because it is the one question
+        that uses the whole screen — and a second one is not a thinner version
+        of that, it is the opposite of it.
+
+        Held through every sweep but the last, where a date with nothing else
+        to give would otherwise produce a two-question quiz. A quiz of five
+        maps is bad; four empty slots are worse.
+        """
+        qtype = q.get("type")
+        if qtype in CLOSER_TYPES or qtype in FEATURE_TYPES:
+            return chosen_types[qtype] < MAX_CLOSERS
+        return True
+
     def _pair_ok(q):
         """
-        A closer may appear once. Everything else is a preference rather than a
-        gate — see `_best`, which ranks a repeated sport-and-format pairing last
-        without refusing it, because refusing it outright fought the format
-        settling and pushed every quiz back to five different interactions.
+        The soft half: a repeated sport-and-format pairing is ranked last by
+        `_best` rather than refused, because refusing it outright fought the
+        format settling and pushed every quiz back to five interactions.
         """
-        if q.get("type") in CLOSER_TYPES or q.get("type") in FEATURE_TYPES:
-            # One each. A feature question is guaranteed a slot precisely
-            # because it is a change of pace, and two maps in five is no longer
-            # a change of pace — it is the quiz being about maps.
-            return chosen_types[q.get("type")] < MAX_CLOSERS
         return True
 
     # The opener is chosen before the ladder runs, because rotation matters
@@ -375,7 +387,7 @@ def assemble(quiz_date, questions, used_ids=None, mix=None, recent_openers=None)
         feature = [q for q in pool
                    if q.get("type") in FEATURE_TYPES
                    and q["questionId"] not in chosen_ids
-                   and _free(q) and _sport_ok(q)]
+                   and _free(q) and _sport_ok(q) and _once_only(q)]
         pick = _best(feature, chosen_sports, chosen_types, chosen_pairs=chosen_pairs)
         if pick:
             _take(pick)
@@ -387,7 +399,7 @@ def assemble(quiz_date, questions, used_ids=None, mix=None, recent_openers=None)
             break
         cands = [q for q in by_tier.get(tier, [])
                  if q["questionId"] not in chosen_ids and _free(q)
-                 and _type_ok(q) and _sport_ok(q) and _pair_ok(q)]
+                 and _type_ok(q) and _sport_ok(q) and _once_only(q)]
         pick = _best(cands, chosen_sports, chosen_types, chosen_pairs=chosen_pairs)
         if pick:
             _take(pick)
@@ -410,18 +422,18 @@ def assemble(quiz_date, questions, used_ids=None, mix=None, recent_openers=None)
         # third and fourth baseball question it never needed.
         sweeps = (
             (True, True, True),     # everything honoured
-            (True, True, False),    # let a sport-and-format pairing repeat
-            (False, True, False),   # let the format repeat
-            (False, False, False),  # last resort: let one sport dominate
+            (False, True, True),    # let the format repeat
+            (False, False, True),   # let one sport dominate
+            (False, False, False),  # last resort: even a second map or closer
         )
-        for honour_type_cap, honour_sport_cap, honour_pair in sweeps:
+        for honour_type_cap, honour_sport_cap, honour_once in sweeps:
             while filled < missing:
                 cands = [q for q in pool
                          if q["questionId"] not in chosen_ids
                          and _free(q)
+                         and (not honour_once or _once_only(q))
                          and (not honour_type_cap or _type_ok(q))
-                         and (not honour_sport_cap or _sport_ok(q))
-                         and (not honour_pair or _pair_ok(q))]
+                         and (not honour_sport_cap or _sport_ok(q))]
                 if not cands:
                     break
 
