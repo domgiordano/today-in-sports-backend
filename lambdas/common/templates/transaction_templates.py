@@ -14,6 +14,7 @@ provides them.
 
 import hashlib
 
+from lambdas.common.templates import phrasing
 from lambdas.common.templates.mlb_templates import (
     pretty_date,
     tier_for,
@@ -118,11 +119,22 @@ def mc_destination(event, ctx):
         return []
 
     if f.get("fromTeam"):
-        prompt = (f"On this day in {event['year']}, the {f['fromTeam']} sent "
-                  f"{f['player']} to which team?")
+        prompt = phrasing.pick([
+            (f"On this day in {event['year']}, the {f['fromTeam']} sent "
+             f"{f['player']} to which team?"),
+            (f"{f['player']} left the {f['fromTeam']} on this day in "
+             f"{event['year']}. Where did he go?"),
+            (f"In {event['year']}, the {f['fromTeam']} moved {f['player']} on. "
+             f"Which club took him?"),
+        ], event["gameId"], "traded_away", f["player"])
     else:
-        prompt = (f"On this day in {event['year']}, {f['player']} signed with "
-                  f"which team?")
+        prompt = phrasing.pick([
+            (f"On this day in {event['year']}, {f['player']} signed with "
+             f"which team?"),
+            (f"{f['player']} put pen to paper on this day in {event['year']}. "
+             f"For whom?"),
+            (f"Which club signed {f['player']} on this day in {event['year']}?"),
+        ], event["gameId"], "signed", f["player"])
 
     return [_q(event, "mc", prompt, f["toTeam"], distractors=distractors)]
 
@@ -137,8 +149,14 @@ def mc_origin(event, ctx):
     if len(distractors) < 3:
         return []
 
-    prompt = (f"{pretty_date(event['gameDate'])}: the {f['toTeam']} acquired "
-              f"{f['player']} from which club?")
+    prompt = phrasing.pick([
+        (f"{pretty_date(event['gameDate'])}: the {f['toTeam']} acquired "
+         f"{f['player']} from which club?"),
+        (f"The {f['toTeam']} picked up {f['player']} on "
+         f"{pretty_date(event['gameDate'])}. Who did they get him from?"),
+        (f"On {pretty_date(event['gameDate'])}, {f['player']} arrived at the "
+         f"{f['toTeam']}. Which club had he been with?"),
+    ], event["gameId"], "acquired_from", f["player"])
     return [_q(event, "mc", prompt, f["fromTeam"], distractors=distractors)]
 
 
@@ -162,8 +180,14 @@ def mc_who_moved(event, ctx):
     if len(others) < 3:
         return []
 
-    prompt = (f"On this day in {event['year']}, the {f['fromTeam']} traded "
-              f"which player to the {f['toTeam']}?")
+    prompt = phrasing.pick([
+        (f"On this day in {event['year']}, the {f['fromTeam']} traded "
+         f"which player to the {f['toTeam']}?"),
+        (f"The {f['fromTeam']} and the {f['toTeam']} did business on this day "
+         f"in {event['year']}. Who went to the {f['toTeam']}?"),
+        (f"Which player did the {f['fromTeam']} send to the {f['toTeam']} on "
+         f"this day in {event['year']}?"),
+    ], event["gameId"], "traded_which_player", f.get("player"))
     return [_q(event, "mc", prompt, f["player"], distractors=others[:3])]
 
 
@@ -176,9 +200,15 @@ def numeric_sale_price(event, ctx):
     if not amount or not f.get("player"):
         return []
 
-    prompt = (f"On this day in {event['year']}, {f['player']} was sold"
-              + (f" to the {f['toTeam']}" if f.get("toTeam") else "")
-              + ". How much cash was involved, in dollars?")
+    to_club = f" to the {f['toTeam']}" if f.get("toTeam") else ""
+    prompt = phrasing.pick([
+        (f"On this day in {event['year']}, {f['player']} was sold{to_club}. "
+         f"How much cash was involved, in dollars?"),
+        (f"{f['player']} changed hands{to_club} on this day in "
+         f"{event['year']}. What was the fee, in dollars?"),
+        (f"A cheque was written for {f['player']}{to_club} in "
+         f"{event['year']}. How many dollars?"),
+    ], event["gameId"], "sale_price", amount)
 
     return [_q(event, "numeric", prompt, amount,
                numericAnswer=amount,
@@ -197,9 +227,14 @@ def numeric_deal_size(event, ctx):
     if count < 4 or not f.get("fromTeam") or not f.get("toTeam"):
         return []
 
-    prompt = (f"On this day in {event['year']}, the {f['fromTeam']} and "
-              f"{f['toTeam']} completed a deal headlined by {f['player']}. "
-              f"How many players did it involve?")
+    prompt = phrasing.pick([
+        (f"On this day in {event['year']}, the {f['fromTeam']} and "
+         f"{f['toTeam']} completed a deal headlined by {f['player']}. "
+         f"How many players did it involve?"),
+        (f"The {f['fromTeam']}-{f['toTeam']} trade built around {f['player']} "
+         f"went through on this day in {event['year']}. How many players "
+         f"were in it altogether?"),
+    ], event["gameId"], "blockbuster_size", f.get("playerCount"))
 
     return [_q(event, "numeric", prompt, count,
                numericAnswer=count, tolerance=1)]

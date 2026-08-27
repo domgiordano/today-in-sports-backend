@@ -10,6 +10,7 @@ not, which is what makes the multiple-choice type actually hard.
 """
 
 import hashlib
+from lambdas.common.templates import phrasing
 
 CURRENT_YEAR = 2026
 
@@ -245,7 +246,16 @@ def numeric_one_nothing_innings(event, ctx):
 
 
 def numeric_blowout_margin(event, ctx):
-    """A second angle on blowouts so one event yields more than one question."""
+    """
+    A second angle on blowouts so one event yields more than one question.
+
+    It asks for the beaten side's score rather than the margin. Stating the
+    scoreline and asking for the margin — which is what this did — is a
+    subtraction test with a sports fact attached: the answer was written in the
+    prompt two words earlier. Giving one side and asking for the other keeps
+    the anchor, because knowing the winner put up 20 tells you what kind of
+    game it was, without handing over the number being asked for.
+    """
     if event["reason"] != "blowout":
         return []
     f = event["facts"]
@@ -254,11 +264,19 @@ def numeric_blowout_margin(event, ctx):
     margin = f["runs"] - f["opponentRuns"]
     if margin < 10:
         return []
-    return [_q(event, "numeric",
-               f"On {pretty_date(event['gameDate'])}, the {f['scoringTeam']} routed the "
-               f"{f['opponent']} {f['runs']}-{f['opponentRuns']}. "
-               f"What was the margin of victory?",
-               margin, numericAnswer=margin, tolerance=2)]
+    conceded = f["opponentRuns"]
+    date = pretty_date(event["gameDate"])
+    prompt = phrasing.pick([
+        (f"On {date}, the {f['scoringTeam']} put {f['runs']} runs on the "
+         f"{f['opponent']}. How many did the {f['opponent']} manage in reply?"),
+        (f"The {f['scoringTeam']} scored {f['runs']} against the {f['opponent']} "
+         f"on {date}. What did the {f['opponent']} finish on?"),
+        (f"On {date}, the {f['opponent']} were on the wrong end of a "
+         f"{f['runs']}-run afternoon from the {f['scoringTeam']}. How many did "
+         f"they score themselves?"),
+    ], event["gameId"], "blowout_margin", conceded)
+    return [_q(event, "numeric", prompt, conceded,
+               numericAnswer=conceded, tolerance=1)]
 
 
 TEMPLATES = [

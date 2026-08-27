@@ -14,6 +14,7 @@ invented.
 
 import hashlib
 from lambdas.common.sources import nba_franchises
+from lambdas.common.templates import phrasing
 
 CURRENT_YEAR = 2026
 
@@ -138,11 +139,16 @@ def nhl_playoff_overtime(event, ctx):
     pool = _pick(ctx.get("nhl_teams", []), {f["winningTeam"], f["losingTeam"]}, 3)
     if len(pool) < 3:
         return []
-    return [_q(event, "mc",
-               f"On {pretty_date(event['gameDate'])}, a {f['round']} game went to "
-               f"overtime and finished {f['winningScore']}-{f['losingScore']}. "
-               f"Who won it?",
-               f["winningTeam"], distractors=pool)]
+    date = pretty_date(event["gameDate"])
+    score = f"{f['winningScore']}-{f['losingScore']}"
+    prompt = phrasing.pick([
+        (f"On {date}, a {f['round']} game went to overtime and finished "
+         f"{score}. Who won it?"),
+        (f"A {f['round']} tie needed extra time on {date}, ending {score}. "
+         f"Which side came through?"),
+        (f"{date}: {score} after overtime in the {f['round']}. Who took it?"),
+    ], event["gameId"], "nhl_playoff_ot", f["winningTeam"])
+    return [_q(event, "mc", prompt, f["winningTeam"], distractors=pool)]
 
 
 # --------------------------------------------------------------- motorsport
@@ -236,10 +242,13 @@ def nfl_playoff_overtime(event, ctx):
     pool = _pick(ctx.get("nfl_teams", []), {f["winningTeam"], f["losingTeam"]}, 3)
     if len(pool) < 3:
         return []
-    return [_q(event, "mc",
-               f"A {f['round']} game on {pretty_date(event['gameDate'])} went to "
-               f"overtime. Who won it?",
-               f["winningTeam"], distractors=pool)]
+    date = pretty_date(event["gameDate"])
+    prompt = phrasing.pick([
+        f"A {f['round']} game on {date} went to overtime. Who won it?",
+        f"On {date}, a {f['round']} game needed overtime. Which side won?",
+        f"{date}: overtime in the {f['round']}. Who came out on top?",
+    ], event["gameId"], "nfl_playoff_ot", f["winningTeam"])
+    return [_q(event, "mc", prompt, f["winningTeam"], distractors=pool)]
 
 
 def nfl_shutout_winner(event, ctx):
@@ -276,10 +285,14 @@ def nfl_overtime_winner(event, ctx):
     pool = _pick(ctx.get("nfl_teams", []), {f["winningTeam"], f["losingTeam"]}, 3)
     if len(pool) < 3:
         return []
-    return [_q(event, "mc",
-               f"A game on {pretty_date(event['gameDate'])} went to overtime. "
-               f"Who beat the {f['losingTeam']}?",
-               f["winningTeam"], distractors=pool)]
+    date = pretty_date(event["gameDate"])
+    prompt = phrasing.pick([
+        f"A game on {date} went to overtime. Who beat the {f['losingTeam']}?",
+        f"The {f['losingTeam']} lost in overtime on {date}. To whom?",
+        (f"{date}: the {f['losingTeam']} came up short after overtime. Which "
+         f"team beat them?"),
+    ], event["gameId"], "nfl_regular_ot", f["winningTeam"])
+    return [_q(event, "mc", prompt, f["winningTeam"], distractors=pool)]
 
 
 def nfl_shootout_points(event, ctx):
@@ -466,25 +479,35 @@ def nba_late_playoff_winner(event, ctx):
 
 
 def nba_blowout_margin(event, ctx):
+    """
+    Asks for the beaten side's score, not the margin.
+
+    Stating the scoreline and asking for the margin is a subtraction test — the
+    answer sat in the prompt two words earlier. One side given, the other asked
+    for, keeps the anchor without handing over the number.
+    """
     if event["sport"] != "nba" or event["reason"] not in ("nba_blowout",
                                                           "nba_playoff_blowout"):
         return []
     f = event["facts"]
-    margin = f.get("margin")
-    if not margin:
+    if not f.get("margin") or f.get("losingScore") is None:
         return []
+    conceded = f["losingScore"]
+    date = pretty_date(event["gameDate"])
     winner = _nba_club(event, ctx, "winningTeam")
     loser = _nba_club(event, ctx, "losingTeam")
     if winner and loser:
-        prompt = (f"On {pretty_date(event['gameDate'])}, the {winner} "
-                  f"routed the {loser} {f['winningScore']}-"
-                  f"{f['losingScore']}. What was the margin?")
+        prompt = phrasing.pick([
+            (f"On {date}, the {winner} put {f['winningScore']} on the {loser}. "
+             f"How many did the {loser} score?"),
+            (f"The {winner} ran up {f['winningScore']} against the {loser} on "
+             f"{date}. What did the {loser} finish on?"),
+        ], event["gameId"], "nba_blowout", conceded)
     else:
-        prompt = (f"On {pretty_date(event['gameDate'])}, an NBA game finished "
-                  f"{f['winningScore']}-{f['losingScore']}. What was the "
-                  f"winning margin?")
-    return [_q(event, "numeric", prompt, margin,
-               numericAnswer=margin, tolerance=4)]
+        prompt = (f"On {date}, the winning side in an NBA game scored "
+                  f"{f['winningScore']}. How many did the losers manage?")
+    return [_q(event, "numeric", prompt, conceded,
+               numericAnswer=conceded, tolerance=3)]
 
 
 def nba_combined_points(event, ctx):
@@ -522,7 +545,7 @@ def soccer_title_winner(event, ctx):
     if len(pool) < 3:
         return []
     return [_q(event, "mc",
-               f"Which club clinched the {f['competition']} title on "
+               f"Which club clinched the {phrasing.competition(f['competition'])} title on "
                f"{pretty_date(event['gameDate'])}?",
                f["champion"], distractors=pool, answerKind="club")]
 
@@ -535,7 +558,7 @@ def soccer_title_margin(event, ctx):
     if left is None:
         return []
     return [_q(event, "numeric",
-               f"{f['champion']} sealed the {f['competition']} on "
+               f"{f['champion']} sealed the {phrasing.competition(f['competition'])} on "
                f"{pretty_date(event['gameDate'])}. How many matches did the "
                f"runner-up still have left to play?",
                left, numericAnswer=left, tolerance=1)]
@@ -545,10 +568,17 @@ def soccer_big_win_score(event, ctx):
     if event["sport"] != "soccer" or event["reason"] != "soccer_big_win":
         return []
     f = event["facts"]
-    return [_q(event, "numeric",
-               f"On {pretty_date(event['gameDate'])}, {f['winningTeam']} "
-               f"thrashed {f['losingTeam']} in the {f['competition']}. "
-               f"How many goals did {f['winningTeam']} score?",
+    comp = phrasing.competition(f["competition"])
+    date = pretty_date(event["gameDate"])
+    prompt = phrasing.pick([
+        (f"On {date}, {f['winningTeam']} took {f['losingTeam']} apart in the "
+         f"{comp}. How many did they score?"),
+        (f"{f['losingTeam']} were overrun by {f['winningTeam']} in the {comp} "
+         f"on {date}. How many goals did {f['winningTeam']} put past them?"),
+        (f"In the {comp} on {date}, {f['winningTeam']} beat {f['losingTeam']} "
+         f"by a margin nobody saw coming. How many did the winners score?"),
+    ], event["gameId"], "soccer_big_win", f["winningScore"])
+    return [_q(event, "numeric", prompt,
                f["winningScore"], numericAnswer=f["winningScore"], tolerance=1)]
 
 
@@ -557,13 +587,25 @@ def soccer_goal_fest_total(event, ctx):
         return []
     f = event["facts"]
     total = f.get("combinedGoals")
-    if not total:
+    if not total or f.get("homeScore") is None:
         return []
-    return [_q(event, "numeric",
-               f"{f['homeTeam']} and {f['awayTeam']} produced a remarkable "
-               f"{f['competition']} match on {pretty_date(event['gameDate'])}. "
-               f"How many goals were scored in total?",
-               total, numericAnswer=total, tolerance=1)]
+    # One side given, the other asked for. "Produced a remarkable match. How
+    # many goals in total?" gave the player nothing to reason from — there was
+    # no route to the answer except having memorised that fixture, so it played
+    # as a blind guess inside the tolerance. Knowing the home side got four
+    # tells you what kind of afternoon it was.
+    away = f["awayScore"]
+    comp = phrasing.competition(f["competition"])
+    date = pretty_date(event["gameDate"])
+    prompt = phrasing.pick([
+        (f"{f['homeTeam']} scored {f['homeScore']} at home to {f['awayTeam']} "
+         f"in the {comp} on {date}. How many did {f['awayTeam']} get?"),
+        (f"In a {comp} match on {date}, {f['homeTeam']} managed "
+         f"{f['homeScore']} against {f['awayTeam']}. What did the visitors "
+         f"finish with?"),
+    ], event["gameId"], "soccer_goal_fest", away)
+    return [_q(event, "numeric", prompt, away,
+               numericAnswer=away, tolerance=1)]
 
 
 TEMPLATES += [

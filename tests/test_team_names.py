@@ -203,7 +203,9 @@ def test_an_old_basketball_question_names_the_clubs_as_they_were_called():
     assert "Milwaukee Hawks" in q["prompt"]
     assert "Sacramento" not in q["prompt"]
     assert "Atlanta" not in q["prompt"]
-    assert q["numericAnswer"] == 59
+    # The beaten side's score, not the margin: stating the scoreline and asking
+    # for the margin put the answer in the prompt.
+    assert q["numericAnswer"] == 61
 
 
 def test_a_club_the_source_cannot_place_is_still_left_unnamed():
