@@ -428,19 +428,28 @@ class TestSportCap:
 
 
 class TestQuizShape:
-    def test_it_settles_on_a_few_formats_rather_than_a_new_one_each_time(self):
+    def test_it_reuses_a_format_in_a_new_sport_before_reaching_for_a_new_one(self):
         """
         Five questions in five different interactions meant learning a new
         control five times in three minutes. Content variety is the point;
         interface variety is not.
+
+        Stated as the choice the assembler actually faces rather than as a
+        count. A bare "at most N formats" cannot express it: avoiding a
+        repeated sport-and-format pairing sometimes costs a format, and which
+        of the two should yield is exactly what this asserts. A second numeric
+        question in a different sport beats a format nobody has seen yet.
         """
-        bank = []
-        for i, t in enumerate(["mc", "numeric", "multi", "map", "ordering", "clue"]):
-            for tier in range(1, 6):
-                bank.append(typed(f"{t}{tier}", tier, ["mlb", "soccer", "nhl"][i % 3],
-                                  t, "08-13"))
+        # Three sports offering numeric, and a fourth format available only in
+        # a sport already on the board.
+        bank = [typed(f"n{i}", i + 1, s, "numeric", "08-13")
+                for i, s in enumerate(("mlb", "soccer", "nhl"))]
+        bank += [typed("mc1", 4, "f1", "mc", "08-13")]
+        bank += [typed("ord1", 5, "mlb", "ordering", "08-13")]
+        bank += [typed("map1", 5, "nba", "map", "08-13")]
         r = asm.assemble("2026-08-13", bank)
-        assert len({x["type"] for x in r.questions}) <= asm.TARGET_DISTINCT_FORMATS + 1
+        types = collections.Counter(x["type"] for x in r.questions)
+        assert types["numeric"] >= 2, dict(types)
 
     def test_the_opener_stays_first_even_when_its_tier_would_not(self):
         bank = [typed("late", 5, "soccer", "mc", "08-13", score=99)]

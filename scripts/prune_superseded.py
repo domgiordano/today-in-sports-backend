@@ -31,6 +31,8 @@ import boto3                                                     # noqa: E402
 from decimal import Decimal                                       # noqa: E402
 
 from lambdas.common import constants                             # noqa: E402
+from lambdas.common.templates import mlb_templates as mlb_tpl         # noqa: E402
+from lambdas.common.templates import ordering_templates as ord_tpl    # noqa: E402
 from lambdas.common.templates import transaction_templates as tx_tpl  # noqa: E402
 from lambdas.common.templates import winter_templates as winter_tpl   # noqa: E402
 
@@ -63,6 +65,14 @@ def current_ids(events):
     fresh = winter_tpl.generate(winter, winter_tpl.build_context(winter))
     if tx:
         fresh += tx_tpl.generate(tx, tx_tpl.build_context(tx))
+    # Must mirror `regenerate_questions` exactly. It did not, and the prune
+    # then judged 6,186 rewritten clue ladders as "not produced by the current
+    # templates" — which is to say it could not see them at all, and retired 23
+    # rows instead of the whole set.
+    for e in events:
+        fresh.extend(ord_tpl.clue_ladder(e))
+    for e in (e for e in events if e.get("sport") == "mlb"):
+        fresh.extend(mlb_tpl.numeric_blowout_margin(e, {}))
     return {q["questionId"] for q in fresh}, {
         (q.get("sourceEventId"), q.get("type")) for q in fresh}
 

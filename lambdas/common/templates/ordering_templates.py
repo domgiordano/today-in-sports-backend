@@ -16,6 +16,8 @@ fraction - there is no separate grading.
 
 import hashlib
 
+from lambdas.common.templates import phrasing
+
 from lambdas.common.templates.mlb_templates import pretty_date, tier_for
 
 __all__ = ["generate", "validate", "build_context"]
@@ -334,7 +336,23 @@ def clue_ladder(event, ctx=None):
     if any(answer.lower() in c.lower() for c in clues):
         return []
 
-    prompt = ("Who is this? Every clue you take is worth fewer points.")
+    # The second half used to read "Every clue you take is worth fewer points",
+    # which the screen already says twice — the header shows "worth 80%" and
+    # the button says "lowers what this question is worth". Restating the
+    # scoring rule in the one line of copy unique to the question meant 5,681
+    # questions whose prompt carried no information about the question, and it
+    # was by a wide margin the most repeated sentence in the game.
+    #
+    # These say what kind of puzzle it is instead, and leave the arithmetic to
+    # the interface that is already showing it.
+    prompt = phrasing.pick([
+        "Who is this?",
+        "Name the player.",
+        "One player, one name. Who is it?",
+        "Work out who this is.",
+        "Which player do these describe?",
+        "Take as few clues as you can. Who is this?",
+    ], event["gameId"], "clue_ladder", answer)
 
     return [_q(event, "clue", prompt, answer,
                clues=clues, clueCount=len(clues))]

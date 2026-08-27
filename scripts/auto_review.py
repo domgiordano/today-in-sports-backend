@@ -97,7 +97,14 @@ def flags_for(q):
     answer = q.get("answer")
     qtype = q.get("type")
 
-    if len(prompt) < MIN_PROMPT_CHARS:
+    # A clue ladder is exempt: its prompt is the framing ("Who is this?") and
+    # every fact lives in the rungs, so length here measures nothing. The old
+    # prompt cleared the bar only by padding itself with the scoring rule the
+    # screen already displays twice, which is not the same as being informative.
+    if qtype == "clue":
+        if not (q.get("clues") or []):
+            problems.append("clue ladder with no clues")
+    elif len(prompt) < MIN_PROMPT_CHARS:
         problems.append("prompt is very short")
 
     # The answer sitting in its own prompt. Not caught by validation, because
