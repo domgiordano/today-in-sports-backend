@@ -362,6 +362,21 @@ def assemble(quiz_date, questions, used_ids=None, mix=None, recent_openers=None)
     if opener:
         _take(opener)
 
+    # One feature question, claimed before the ladder rather than after it.
+    #
+    # Placed after the ladder it was refused on 25 of 43 dates that had one to
+    # give: maps are 87% baseball, and by then the two-per-sport budget was
+    # already spent on ordinary baseball questions. Taking it first means the
+    # map *is* one of those two, and the rest of the quiz fills around it.
+    if not any(q.get("type") in FEATURE_TYPES for q in chosen):
+        feature = [q for q in pool
+                   if q.get("type") in FEATURE_TYPES
+                   and q["questionId"] not in chosen_ids
+                   and _free(q) and _sport_ok(q)]
+        pick = _best(feature, chosen_sports, chosen_types, chosen_pairs=chosen_pairs)
+        if pick:
+            _take(pick)
+
     # Pass 1 — one question per tier, preferring an unrepresented sport.
     for slot in mix:
         tier = slot["tier"]
@@ -435,19 +450,6 @@ def assemble(quiz_date, questions, used_ids=None, mix=None, recent_openers=None)
             warnings.append(
                 f"{over_sport} slot(s) exceeded the {MAX_PER_SPORT}-per-sport "
                 f"cap; this date has too little outside one sport")
-
-    # One feature question, if the date has one and the quiz has not already
-    # picked one up. Taken before the ladder finishes rather than after, so it
-    # competes for a slot instead of being bolted on.
-    if len(chosen) < QUIZ_LENGTH and not any(
-            q.get("type") in FEATURE_TYPES for q in chosen):
-        feature = [q for q in pool
-                   if q.get("type") in FEATURE_TYPES
-                   and q["questionId"] not in chosen_ids
-                   and _free(q) and _sport_ok(q)]
-        pick = _best(feature, chosen_sports, chosen_types, chosen_pairs=chosen_pairs)
-        if pick:
-            _take(pick)
 
     # The shape of the quiz: an on-ramp, a rising middle, a closer.
     #
