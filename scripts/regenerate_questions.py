@@ -56,11 +56,12 @@ WINTER_SPORTS = ("nhl", "nba", "soccer", "nfl", "f1")
 TRANSACTION_REASONS = {"star_free_agent", "star_trade", "blockbuster_trade",
                        "star_purchase", "landmark_sale", "star_drafted"}
 
-# Baseball game templates draw distractors from that day's *other games*, which
-# the events table cannot supply. Regenerating them here would hand them a
-# thinner pool than they were built with, so they are left alone; a change to
-# one of those needs the Retrosheet archive and `generate_questions.py`.
-MLB_GAME_REASONS_SKIPPED = True
+# Baseball game templates mostly draw distractors from that day's *other
+# games*, which the events table cannot supply — regenerating those here would
+# hand them a thinner pool than they were built with. The numeric ones need no
+# pool at all, so they are named explicitly and regenerated; anything else
+# needs the Retrosheet archive and `generate_questions.py`.
+MLB_CONTEXT_FREE_TEMPLATES = ("numeric_blowout_margin",)
 
 
 def _clean(o):
@@ -114,6 +115,13 @@ def main():
     fresh += winter_tpl.generate(winter, winter_tpl.build_context(winter))
     if tx:
         fresh += tx_tpl.generate(tx, tx_tpl.build_context(tx))
+
+    # Baseball templates that ask for a number and so need no distractor pool.
+    mlb_games = [e for e in events if e.get("sport") == "mlb"]
+    for name in MLB_CONTEXT_FREE_TEMPLATES:
+        template = getattr(mlb_tpl, name)
+        for e in mlb_games:
+            fresh.extend(template(e, {}))
 
     valid = [q for q in fresh if not mlb_tpl.validate(q)]
     print(f"regenerated    : {len(fresh)}  ({len(valid)} valid)")

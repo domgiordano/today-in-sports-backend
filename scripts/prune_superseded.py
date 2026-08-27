@@ -79,7 +79,10 @@ def scan(table, **kw):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--apply", action="store_true")
+    ap.add_argument("--apply", action="store_true",
+                    help="delete the unreferenced superseded rows")
+    ap.add_argument("--retire", action="store_true",
+                    help="mark every superseded row rejected, referenced or not")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
 
@@ -117,6 +120,25 @@ def main():
                  if referenced & {r["questionId"] for r in kept}
                  and set(z.get("questionIds") or []) & {r["questionId"] for r in kept}}
         print(f"    quizzes still pointing at old wording: {len(dates)}")
+
+    if args.retire:
+        # Deleting is not enough on its own. A referenced row cannot be deleted
+        # until the quizzes have moved, and the quizzes will not move while the
+        # row is still `approved` — the assembler keeps choosing it, so the
+        # rebuild puts it straight back and the prune keeps sparing it. Marking
+        # it rejected breaks that circle: the assembler stops seeing it, the
+        # next rebuild moves off it, and the delete then has nothing to spare.
+        with qt.batch_writer(overwrite_by_pkeys=["questionId"]) as batch:
+            for r in stale + kept:
+                item = dict(r)
+                item["status"] = "rejected"
+                item["reviewFlags"] = sorted(set(
+                    (item.get("reviewFlags") or [])
+                    + ["superseded by a reworded template"]))
+                batch.put_item(Item=item)
+        print(f"\nretired {len(stale) + len(kept)} superseded questions "
+              f"(status=rejected). Rebuild the quizzes, then run --apply.")
+        return
 
     if not args.apply:
         print("\ndry run - nothing deleted.")

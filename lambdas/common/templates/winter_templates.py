@@ -265,17 +265,26 @@ def nfl_shutout_winner(event, ctx):
 
 
 def nfl_blowout_margin(event, ctx):
+    """
+    Asks for the beaten side's score. Written first as "beat them 47-10, by how
+    many points?", which is the same subtraction test the baseball and
+    basketball versions had — the answer sat in the prompt.
+    """
     if event["sport"] != "nfl" or event["reason"] != "regular_season_blowout":
         return []
     f = event["facts"]
-    n = f.get("margin")
-    if not n:
+    if f.get("losingScore") is None or not f.get("winningScore"):
         return []
-    return [_q(event, "numeric",
-               f"On {pretty_date(event['gameDate'])} the {f['winningTeam']} beat "
-               f"the {f['losingTeam']} {f['winningScore']}-{f['losingScore']}. "
-               f"By how many points?",
-               n, numericAnswer=n, tolerance=3)]
+    conceded = f["losingScore"]
+    date = pretty_date(event["gameDate"])
+    prompt = phrasing.pick([
+        (f"On {date} the {f['winningTeam']} put {f['winningScore']} points on "
+         f"the {f['losingTeam']}. How many did the {f['losingTeam']} score?"),
+        (f"The {f['winningTeam']} ran up {f['winningScore']} against the "
+         f"{f['losingTeam']} on {date}. What did the losers finish on?"),
+    ], event["gameId"], "nfl_blowout_margin", conceded)
+    return [_q(event, "numeric", prompt, conceded,
+               numericAnswer=conceded, tolerance=3)]
 
 
 def nfl_overtime_winner(event, ctx):

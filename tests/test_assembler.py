@@ -572,3 +572,13 @@ class TestFeatureQuestion:
         r = asm.assemble("2026-08-13", self._bank(with_map=False))
         assert r.complete
         assert not any(q["type"] == "map" for q in r.questions)
+
+    def test_two_maps_is_not_variety(self):
+        """
+        A feature question earns its slot by being a change of pace. Two of
+        them in five is the quiz being about maps instead.
+        """
+        bank = self._bank()
+        bank += [typed(f"mapx{i}", i, "f1", "map", "08-13") for i in range(1, 5)]
+        r = asm.assemble("2026-08-13", bank)
+        assert sum(1 for q in r.questions if q["type"] == "map") == 1

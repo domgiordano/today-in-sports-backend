@@ -352,7 +352,10 @@ def assemble(quiz_date, questions, used_ids=None, mix=None, recent_openers=None)
         without refusing it, because refusing it outright fought the format
         settling and pushed every quiz back to five different interactions.
         """
-        if q.get("type") in CLOSER_TYPES:
+        if q.get("type") in CLOSER_TYPES or q.get("type") in FEATURE_TYPES:
+            # One each. A feature question is guaranteed a slot precisely
+            # because it is a change of pace, and two maps in five is no longer
+            # a change of pace — it is the quiz being about maps.
             return chosen_types[q.get("type")] < MAX_CLOSERS
         return True
 
