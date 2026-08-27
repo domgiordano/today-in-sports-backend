@@ -31,17 +31,10 @@ import boto3                                                     # noqa: E402
 from decimal import Decimal                                       # noqa: E402
 
 from lambdas.common import constants                             # noqa: E402
-from lambdas.common.templates import mlb_templates as mlb_tpl         # noqa: E402
-from lambdas.common.templates import ordering_templates as ord_tpl    # noqa: E402
-from lambdas.common.templates import transaction_templates as tx_tpl  # noqa: E402
-from lambdas.common.templates import winter_templates as winter_tpl   # noqa: E402
-
-WINTER_SPORTS = ("nhl", "nba", "soccer", "nfl", "f1")
-TRANSACTION_REASONS = {"star_free_agent", "star_trade", "blockbuster_trade",
-                       "star_purchase", "landmark_sale", "star_drafted"}
-
+from lambdas.common import regeneration                          # noqa: E402
 
 def _plain(o):
+    """Decimal back to int/float so template arithmetic behaves."""
     if isinstance(o, list):
         return [_plain(v) for v in o]
     if isinstance(o, dict):
@@ -49,32 +42,6 @@ def _plain(o):
     if isinstance(o, Decimal):
         return int(o) if o == o.to_integral_value() else float(o)
     return o
-
-
-def current_ids(events):
-    """
-    The ids the templates produce today.
-
-    This is the definition of "not superseded" and it is computed rather than
-    stamped, so the prune stays correct even for rows written before anybody
-    thought to mark them.
-    """
-    winter = [e for e in events if e.get("sport") in WINTER_SPORTS]
-    tx = [e for e in events
-          if e.get("sport") == "mlb" and e.get("reason") in TRANSACTION_REASONS]
-    fresh = winter_tpl.generate(winter, winter_tpl.build_context(winter))
-    if tx:
-        fresh += tx_tpl.generate(tx, tx_tpl.build_context(tx))
-    # Must mirror `regenerate_questions` exactly. It did not, and the prune
-    # then judged 6,186 rewritten clue ladders as "not produced by the current
-    # templates" — which is to say it could not see them at all, and retired 23
-    # rows instead of the whole set.
-    for e in events:
-        fresh.extend(ord_tpl.clue_ladder(e))
-    for e in (e for e in events if e.get("sport") == "mlb"):
-        fresh.extend(mlb_tpl.numeric_blowout_margin(e, {}))
-    return {q["questionId"] for q in fresh}, {
-        (q.get("sourceEventId"), q.get("type")) for q in fresh}
 
 
 def scan(table, **kw):
@@ -107,7 +74,9 @@ def main():
 
     events = scan(dynamo.Table(constants.EVENTS_TABLE_NAME))
     events = [_plain(e) for e in events]
-    fresh_ids, regenerated_slots = current_ids(events)
+    fresh = regeneration.regenerate(events)
+    fresh_ids = {q["questionId"] for q in fresh}
+    regenerated_slots = regeneration.slots(fresh)
     print(f"ids the templates produce today: {len(fresh_ids)}")
 
     # Only slots the templates were actually re-run over can hold a superseded

@@ -45,25 +45,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import boto3                                                     # noqa: E402
 
 from lambdas.common import constants                             # noqa: E402
+from lambdas.common import regeneration                          # noqa: E402
 from lambdas.common.templates import mlb_templates as mlb_tpl    # noqa: E402
-from lambdas.common.templates import ordering_templates as ord_tpl   # noqa: E402
-from lambdas.common.templates import transaction_templates as tx_tpl  # noqa: E402
-from lambdas.common.templates import winter_templates as winter_tpl   # noqa: E402
-
-WINTER_SPORTS = ("nhl", "nba", "soccer", "nfl", "f1")
-# The reason codes the transaction detectors emit, read off the events table
-# rather than guessed — the first guess matched nothing and regenerated no
-# transaction questions at all, silently.
-TRANSACTION_REASONS = {"star_free_agent", "star_trade", "blockbuster_trade",
-                       "star_purchase", "landmark_sale", "star_drafted"}
-
-# Baseball game templates mostly draw distractors from that day's *other
-# games*, which the events table cannot supply — regenerating those here would
-# hand them a thinner pool than they were built with. The numeric ones need no
-# pool at all, so they are named explicitly and regenerated; anything else
-# needs the Retrosheet archive and `generate_questions.py`.
-MLB_CONTEXT_FREE_TEMPLATES = ("numeric_blowout_margin",)
-
 
 def _clean(o):
     if isinstance(o, dict):
@@ -108,26 +91,7 @@ def main():
     print(f"events         : {len(events)}")
     print(f"questions today: {len(existing)}")
 
-    winter = [e for e in events if e.get("sport") in WINTER_SPORTS]
-    tx = [e for e in events
-          if e.get("sport") == "mlb" and e.get("reason") in TRANSACTION_REASONS]
-
-    fresh = []
-    fresh += winter_tpl.generate(winter, winter_tpl.build_context(winter))
-    if tx:
-        fresh += tx_tpl.generate(tx, tx_tpl.build_context(tx))
-
-    # Baseball templates that ask for a number and so need no distractor pool.
-    mlb_games = [e for e in events if e.get("sport") == "mlb"]
-    for name in MLB_CONTEXT_FREE_TEMPLATES:
-        template = getattr(mlb_tpl, name)
-        for e in mlb_games:
-            fresh.extend(template(e, {}))
-
-    # Clue ladders. They build their rungs from the event alone and need no
-    # pool either, and they are the single largest shape in the bank.
-    for e in events:
-        fresh.extend(ord_tpl.clue_ladder(e))
+    fresh = regeneration.regenerate(events)
 
     valid = [q for q in fresh if not mlb_tpl.validate(q)]
     print(f"regenerated    : {len(fresh)}  ({len(valid)} valid)")
@@ -138,7 +102,7 @@ def main():
 
     # A stored question is superseded when the same event and format now
     # produces a different id — that is the template having changed its wording.
-    regenerated_slots = {(q.get("sourceEventId"), q.get("type")) for q in valid}
+    regenerated_slots = regeneration.slots(valid)
     superseded = [q for q in existing
                   if q["questionId"] not in new_ids
                   and (q.get("sourceEventId"), q.get("type")) in regenerated_slots]
