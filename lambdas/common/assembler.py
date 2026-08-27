@@ -52,6 +52,15 @@ MAX_PER_TYPE = 2
 # game can produce and was shipping daily.
 MAX_CLOSERS = 1
 
+# Formats worth having in a quiz when the date can supply one, even though the
+# format-settling rule would otherwise pass over them.
+#
+# The map is the only question that uses the whole screen and the only one that
+# is not answered by typing or tapping a list, and it was reaching 26 of 44
+# days — enough to be absent for a run of days at a time, which reads as "there
+# are no map questions" rather than as variety.
+FEATURE_TYPES = ("map",)
+
 # How many distinct interaction formats a five-question quiz should aim for.
 #
 # Variety of content is the point of the game; variety of *interface* is not.
@@ -426,6 +435,19 @@ def assemble(quiz_date, questions, used_ids=None, mix=None, recent_openers=None)
             warnings.append(
                 f"{over_sport} slot(s) exceeded the {MAX_PER_SPORT}-per-sport "
                 f"cap; this date has too little outside one sport")
+
+    # One feature question, if the date has one and the quiz has not already
+    # picked one up. Taken before the ladder finishes rather than after, so it
+    # competes for a slot instead of being bolted on.
+    if len(chosen) < QUIZ_LENGTH and not any(
+            q.get("type") in FEATURE_TYPES for q in chosen):
+        feature = [q for q in pool
+                   if q.get("type") in FEATURE_TYPES
+                   and q["questionId"] not in chosen_ids
+                   and _free(q) and _sport_ok(q)]
+        pick = _best(feature, chosen_sports, chosen_types, chosen_pairs=chosen_pairs)
+        if pick:
+            _take(pick)
 
     # The shape of the quiz: an on-ramp, a rising middle, a closer.
     #

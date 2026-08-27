@@ -539,3 +539,36 @@ class TestNoDuplicateQuestionShapes:
         bank = [typed(f"s{t}", t, "soccer", "numeric", "08-13") for t in range(1, 6)]
         r = asm.assemble("2026-08-13", bank)
         assert r.complete
+
+
+class TestFeatureQuestion:
+    """
+    The map is the only question that uses the whole screen and the only one
+    not answered by typing or tapping a list. It was reaching 26 of 44 days,
+    which is often enough to be absent for a run of days at a time — and a run
+    of days without one reads as "there are no map questions".
+    """
+
+    def _bank(self, with_map=True):
+        bank = [typed(f"m{t}", t, "mlb", "mc", "08-13") for t in range(1, 6)]
+        bank += [typed(f"s{t}", t, "soccer", "numeric", "08-13") for t in range(1, 6)]
+        bank += [typed(f"n{t}", t, "nhl", "multi", "08-13") for t in range(1, 6)]
+        if with_map:
+            bank.append(typed("map1", 4, "f1", "map", "08-13"))
+        return bank
+
+    def test_a_date_with_a_map_question_gets_one(self):
+        r = asm.assemble("2026-08-13", self._bank())
+        assert any(q["type"] == "map" for q in r.questions), \
+            [q["type"] for q in r.questions]
+
+    def test_it_never_takes_more_than_one(self):
+        bank = self._bank()
+        bank += [typed(f"map{i}", i, "f1", "map", "08-13") for i in range(2, 6)]
+        r = asm.assemble("2026-08-13", bank)
+        assert sum(1 for q in r.questions if q["type"] == "map") == 1
+
+    def test_a_date_without_one_still_builds_a_full_quiz(self):
+        r = asm.assemble("2026-08-13", self._bank(with_map=False))
+        assert r.complete
+        assert not any(q["type"] == "map" for q in r.questions)
