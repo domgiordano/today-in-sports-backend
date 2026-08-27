@@ -200,11 +200,18 @@ def _best(candidates, chosen_sports, chosen_types=None, prefer_new_sport=True,
         # Ranked below everything except raw notability so it is avoided
         # wherever the date has anything else to offer.
         repeat_pair = chosen_pairs[(q["sport"], q.get("type"))] > 0
+        # Pair before format, and the order is the whole point. Format
+        # settling prefers a format already on the board once three are there,
+        # which on its own pulls straight towards a repeat of the same
+        # sport-and-format pairing — the rule meant to stop churn was creating
+        # the duplication. Ranking the pair first keeps the settling but spends
+        # it on a *different* sport: a second numeric question, not a second
+        # soccer numeric question.
         return (
             1 if q.get("_borrowed") else 0,
             0 if (prefer_new_sport and fresh_sport) else 1,
-            format_rank,
             1 if repeat_pair else 0,
+            format_rank,
             -(q.get("notabilityScore") or 0),
             q["questionId"],
         )

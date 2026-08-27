@@ -46,6 +46,7 @@ import boto3                                                     # noqa: E402
 
 from lambdas.common import constants                             # noqa: E402
 from lambdas.common.templates import mlb_templates as mlb_tpl    # noqa: E402
+from lambdas.common.templates import ordering_templates as ord_tpl   # noqa: E402
 from lambdas.common.templates import transaction_templates as tx_tpl  # noqa: E402
 from lambdas.common.templates import winter_templates as winter_tpl   # noqa: E402
 
@@ -122,6 +123,11 @@ def main():
         template = getattr(mlb_tpl, name)
         for e in mlb_games:
             fresh.extend(template(e, {}))
+
+    # Clue ladders. They build their rungs from the event alone and need no
+    # pool either, and they are the single largest shape in the bank.
+    for e in events:
+        fresh.extend(ord_tpl.clue_ladder(e))
 
     valid = [q for q in fresh if not mlb_tpl.validate(q)]
     print(f"regenerated    : {len(fresh)}  ({len(valid)} valid)")
