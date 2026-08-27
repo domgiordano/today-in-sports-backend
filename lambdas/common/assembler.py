@@ -52,6 +52,15 @@ MAX_PER_TYPE = 2
 # game can produce and was shipping daily.
 MAX_CLOSERS = 1
 
+# Formats worth having in a quiz when the date can supply one, even though the
+# format-settling rule would otherwise pass over them.
+#
+# The map is the only question that uses the whole screen and the only one that
+# is not answered by typing or tapping a list, and it was reaching 26 of 44
+# days — enough to be absent for a run of days at a time, which reads as "there
+# are no map questions" rather than as variety.
+FEATURE_TYPES = ("map",)
+
 # How many distinct interaction formats a five-question quiz should aim for.
 #
 # Variety of content is the point of the game; variety of *interface* is not.
@@ -336,15 +345,30 @@ def assemble(quiz_date, questions, used_ids=None, mix=None, recent_openers=None)
     def _sport_ok(q):
         return chosen_sports[q["sport"]] < MAX_PER_SPORT
 
+    def _once_only(q):
+        """
+        Formats a quiz may hold exactly one of, whatever else is scarce.
+
+        Both earn their slot by being unlike the rest of the quiz — a clue
+        ladder because it is the closer, a map because it is the one question
+        that uses the whole screen — and a second one is not a thinner version
+        of that, it is the opposite of it.
+
+        Held through every sweep but the last, where a date with nothing else
+        to give would otherwise produce a two-question quiz. A quiz of five
+        maps is bad; four empty slots are worse.
+        """
+        qtype = q.get("type")
+        if qtype in CLOSER_TYPES or qtype in FEATURE_TYPES:
+            return chosen_types[qtype] < MAX_CLOSERS
+        return True
+
     def _pair_ok(q):
         """
-        A closer may appear once. Everything else is a preference rather than a
-        gate — see `_best`, which ranks a repeated sport-and-format pairing last
-        without refusing it, because refusing it outright fought the format
-        settling and pushed every quiz back to five different interactions.
+        The soft half: a repeated sport-and-format pairing is ranked last by
+        `_best` rather than refused, because refusing it outright fought the
+        format settling and pushed every quiz back to five interactions.
         """
-        if q.get("type") in CLOSER_TYPES:
-            return chosen_types[q.get("type")] < MAX_CLOSERS
         return True
 
     # The opener is chosen before the ladder runs, because rotation matters
@@ -353,6 +377,21 @@ def assemble(quiz_date, questions, used_ids=None, mix=None, recent_openers=None)
     if opener:
         _take(opener)
 
+    # One feature question, claimed before the ladder rather than after it.
+    #
+    # Placed after the ladder it was refused on 25 of 43 dates that had one to
+    # give: maps are 87% baseball, and by then the two-per-sport budget was
+    # already spent on ordinary baseball questions. Taking it first means the
+    # map *is* one of those two, and the rest of the quiz fills around it.
+    if not any(q.get("type") in FEATURE_TYPES for q in chosen):
+        feature = [q for q in pool
+                   if q.get("type") in FEATURE_TYPES
+                   and q["questionId"] not in chosen_ids
+                   and _free(q) and _sport_ok(q) and _once_only(q)]
+        pick = _best(feature, chosen_sports, chosen_types, chosen_pairs=chosen_pairs)
+        if pick:
+            _take(pick)
+
     # Pass 1 — one question per tier, preferring an unrepresented sport.
     for slot in mix:
         tier = slot["tier"]
@@ -360,7 +399,7 @@ def assemble(quiz_date, questions, used_ids=None, mix=None, recent_openers=None)
             break
         cands = [q for q in by_tier.get(tier, [])
                  if q["questionId"] not in chosen_ids and _free(q)
-                 and _type_ok(q) and _sport_ok(q) and _pair_ok(q)]
+                 and _type_ok(q) and _sport_ok(q) and _once_only(q)]
         pick = _best(cands, chosen_sports, chosen_types, chosen_pairs=chosen_pairs)
         if pick:
             _take(pick)
@@ -383,18 +422,18 @@ def assemble(quiz_date, questions, used_ids=None, mix=None, recent_openers=None)
         # third and fourth baseball question it never needed.
         sweeps = (
             (True, True, True),     # everything honoured
-            (True, True, False),    # let a sport-and-format pairing repeat
-            (False, True, False),   # let the format repeat
-            (False, False, False),  # last resort: let one sport dominate
+            (False, True, True),    # let the format repeat
+            (False, False, True),   # let one sport dominate
+            (False, False, False),  # last resort: even a second map or closer
         )
-        for honour_type_cap, honour_sport_cap, honour_pair in sweeps:
+        for honour_type_cap, honour_sport_cap, honour_once in sweeps:
             while filled < missing:
                 cands = [q for q in pool
                          if q["questionId"] not in chosen_ids
                          and _free(q)
+                         and (not honour_once or _once_only(q))
                          and (not honour_type_cap or _type_ok(q))
-                         and (not honour_sport_cap or _sport_ok(q))
-                         and (not honour_pair or _pair_ok(q))]
+                         and (not honour_sport_cap or _sport_ok(q))]
                 if not cands:
                     break
 
