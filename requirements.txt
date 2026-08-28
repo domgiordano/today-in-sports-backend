@@ -1,3 +1,10 @@
 boto3>=1.34
 requests>=2.31
-pyjwt>=2.8
+# The crypto extra, not bare pyjwt.
+#
+# Cognito signs with RS256, and without `cryptography` PyJWT can decode a token
+# but cannot verify its signature — it raises MissingCryptographyError. Nothing
+# noticed for as long as the only verifier was the authorizer lambda, which is
+# deployed and wired to no route. The moment the play handlers began verifying
+# tokens themselves, every signed-in player silently fell back to anonymous.
+pyjwt[crypto]>=2.8
