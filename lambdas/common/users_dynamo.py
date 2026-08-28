@@ -77,6 +77,43 @@ def display_names(user_ids):
     return out
 
 
+# What a fellow group member may see about somebody. Membership is the
+# permission — you are comparing scores with these people, which is the whole
+# point of the group — but that does not extend to their email or their region.
+MEMBER_FIELDS = (
+    "userId", "displayName", "playCount", "totalPoints", "totalCorrect",
+    "currentStreak", "longestStreak", "lastPlayedDate",
+)
+
+
+def profiles(user_ids):
+    """
+    The comparable numbers for many users at once, as {userId: {...}}.
+
+    One BatchGetItem rather than a read per member. A group is capped at fifty
+    people, so this is one request and the standings table it feeds needs no
+    aggregation of its own — every figure it shows is already on the profile.
+    """
+    ids = [u for u in dict.fromkeys(user_ids) if u]
+    if not ids:
+        return {}
+
+    out = {}
+    for start in range(0, len(ids), 100):
+        chunk = ids[start:start + 100]
+        resp = _resource().batch_get_item(
+            RequestItems={
+                constants.USERS_TABLE_NAME: {
+                    "Keys": [{"userId": u} for u in chunk],
+                    "ProjectionExpression": ", ".join(MEMBER_FIELDS),
+                }
+            }
+        )
+        for item in resp.get("Responses", {}).get(constants.USERS_TABLE_NAME, []):
+            out[item["userId"]] = item
+    return out
+
+
 def ensure_user(user_id, email=None, display_name=None):
     """
     Create the record if it is missing, and stamp last seen either way.
