@@ -11,6 +11,7 @@ serve time server-side so scoring has an honest clock.
 
 from datetime import datetime, timezone
 
+from lambdas.common import identity as identity_mod
 from lambdas.common import constants, plays_dynamo, questions_dynamo, quizzes_dynamo
 from lambdas.common.errors import handle_errors, NotFoundError, ValidationError
 from lambdas.common.logger import get_logger
@@ -26,14 +27,12 @@ HANDLER = 'play_start'
 def handler(event, context):
     body = parse_body(event)
 
-    identity = (body.get('deviceId') or '').strip()
-    anonymous = True
-
     # A verified Cognito subject always wins over a client-supplied device id.
-    claims = ((event.get('requestContext') or {}).get('authorizer') or {})
-    if claims.get('sub'):
-        identity = claims['sub']
-        anonymous = False
+    # Verified here rather than read from the request context: this route is
+    # public, so API Gateway never populates claims on it and the read that
+    # used to be here was dead code — every signed-in round was filed as
+    # anonymous under a device id.
+    identity, anonymous = identity_mod.resolve(event, body.get('deviceId'))
 
     if not identity:
         raise ValidationError(

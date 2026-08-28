@@ -13,6 +13,7 @@ client knew, and the score would rest on the honesty of code we do not control.
 Asking twice costs the same as asking once. A refresh is not a second penalty.
 """
 
+from lambdas.common import identity as identity_mod
 from lambdas.common import plays_dynamo, questions_dynamo, scoring
 from lambdas.common.errors import handle_errors, NotFoundError, ValidationError
 from lambdas.common.logger import get_logger
@@ -34,7 +35,9 @@ def handler(event, context):
     require_fields(body, 'index')
 
     identity = (body.get('deviceId') or '').strip()
-    claims = ((event.get('requestContext') or {}).get('authorizer') or {})
+    # Verified from the bearer token: this route is public, so API Gateway
+    # does not populate claims on it.
+    claims = {'sub': identity_mod.subject(event)}
     if claims.get('sub'):
         identity = claims['sub']
 

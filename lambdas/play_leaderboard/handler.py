@@ -10,6 +10,7 @@ board is low stakes, and the alternative is refusing to show a visitor their own
 result. Persistent profiles and streaks are what require an account.
 """
 
+from lambdas.common import identity as identity_mod
 from lambdas.common import (groups_dynamo, plays_dynamo, reactions_dynamo,
                             users_dynamo)
 from lambdas.common.errors import NotFoundError, handle_errors
@@ -103,7 +104,7 @@ def handler(event, context):
     # And one query for the day's reactions rather than one per row.
     counts, by_reactor = reactions_dynamo.for_day(quiz_date)
 
-    viewer = ((event.get('requestContext') or {}).get('authorizer') or {}).get('sub')
+    viewer = identity_mod.subject(event)
     mine = by_reactor.get(viewer, {}) if viewer else {}
 
     board = [public_row(r, i + 1, profile_names, counts, mine)
@@ -113,9 +114,8 @@ def handler(event, context):
     # visible board — which is how an anonymous player sees their standing.
     you = None
     identity = params.get('deviceId')
-    claims = ((event.get('requestContext') or {}).get('authorizer') or {})
-    if claims.get('sub'):
-        identity = claims['sub']
+    if viewer:
+        identity = viewer
 
     if identity:
         session = plays_dynamo.get_session(identity, quiz_date)
