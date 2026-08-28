@@ -8,6 +8,7 @@ What it does need is that nobody outside can read or write, and that is checked
 by the handlers on every call.
 """
 
+import re
 import uuid
 from datetime import datetime, timedelta, timezone
 
@@ -20,6 +21,19 @@ from lambdas.common.logger import get_logger
 log = get_logger(__file__)
 
 MAX_LENGTH = 500
+
+# @handle, matching what a username may contain, bounded to the same 20
+# characters a handle can be so a wall of text cannot be parsed as one.
+#
+# The lookbehind is what stops an email address being read as a mention:
+# "sam@example.com" would otherwise resolve @example, which is harmless only
+# until somebody in the group actually holds that handle. A mention starts a
+# word or it is not a mention.
+_MENTION = re.compile(r"(?<![\w.@])@([a-z0-9_]{3,20})", re.IGNORECASE)
+
+# Enough to address a small group, few enough that a comment cannot be turned
+# into a way of notifying fifty people at once.
+MAX_MENTIONS = 10
 # Enough that a day's argument fits, few enough that one person cannot push the
 # rest of the group off the page.
 MAX_PER_THREAD = 200
@@ -43,7 +57,29 @@ def thread_id(group_id, quiz_date):
     return f"{group_id}#{quiz_date}"
 
 
-def post(group_id, quiz_date, author_id, body):
+def find_mentions(body, handle_to_user):
+    """
+    The users a comment addresses, resolved against who is actually here.
+
+    Only group members are mentionable. An @handle belonging to somebody
+    outside the group resolves to nothing rather than to them — otherwise a
+    private group becomes a way to reach anybody on the app whose handle you
+    can guess, which is the opposite of what a private group is.
+
+    Order is preserved and duplicates dropped, so mentioning somebody twice
+    addresses them once.
+    """
+    seen = []
+    for raw in _MENTION.findall(body or ""):
+        user_id = handle_to_user.get(raw.lower())
+        if user_id and user_id not in seen:
+            seen.append(user_id)
+        if len(seen) >= MAX_MENTIONS:
+            break
+    return seen
+
+
+def post(group_id, quiz_date, author_id, body, mentions=None):
     """
     Add a comment. Returns the stored row.
 
@@ -72,6 +108,8 @@ def post(group_id, quiz_date, author_id, body):
         "postedAt": now.isoformat(),
         "ttl": int((now + timedelta(days=TTL_DAYS)).timestamp()),
     }
+    if mentions:
+        item["mentions"] = list(mentions)
     _table().put_item(Item=item)
     return item
 
