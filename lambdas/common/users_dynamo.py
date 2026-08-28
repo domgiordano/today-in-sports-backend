@@ -26,11 +26,15 @@ log = get_logger(__file__)
 _dynamo = None
 
 
-def _table():
+def _resource():
     global _dynamo
     if _dynamo is None:
         _dynamo = boto3.resource("dynamodb")
-    return _dynamo.Table(constants.USERS_TABLE_NAME)
+    return _dynamo
+
+
+def _table():
+    return _resource().Table(constants.USERS_TABLE_NAME)
 
 
 def _now():
@@ -39,6 +43,38 @@ def _now():
 
 def get_user(user_id):
     return _table().get_item(Key={"userId": user_id}).get("Item")
+
+
+def display_names(user_ids):
+    """
+    Profile display names for many users at once, as {userId: name}.
+
+    The leaderboard needs this per row and a board is up to fifty rows, so it
+    is one BatchGetItem rather than fifty gets. Missing users and users without
+    a name are simply absent from the result — the caller decides what to show
+    instead, which is not this module's business.
+    """
+    ids = [u for u in dict.fromkeys(user_ids) if u]
+    if not ids:
+        return {}
+
+    out = {}
+    # BatchGetItem caps at 100 keys per request.
+    for start in range(0, len(ids), 100):
+        chunk = ids[start:start + 100]
+        resp = _resource().batch_get_item(
+            RequestItems={
+                constants.USERS_TABLE_NAME: {
+                    "Keys": [{"userId": u} for u in chunk],
+                    "ProjectionExpression": "userId, displayName",
+                }
+            }
+        )
+        for item in resp.get("Responses", {}).get(constants.USERS_TABLE_NAME, []):
+            name = (item.get("displayName") or "").strip()
+            if name:
+                out[item["userId"]] = name
+    return out
 
 
 def ensure_user(user_id, email=None, display_name=None):
