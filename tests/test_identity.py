@@ -14,6 +14,26 @@ import pytest
 from lambdas.common import identity
 
 
+def test_rs256_verification_is_actually_available():
+    """
+    PyJWT without the `cryptography` extra decodes tokens but cannot verify an
+    RS256 signature — it raises MissingCryptographyError at verify time, not at
+    import. Cognito signs with RS256, so without this every token is unusable
+    and every signed-in caller silently falls back to anonymous.
+
+    This shipped exactly that way: the local environment had the extra, the
+    Lambda layer was built from a requirements.txt that asked for bare `pyjwt`,
+    and the tests passed while production quietly treated every signed-in
+    player as a guest. Asserting the algorithm is registered is the difference
+    between the two environments, so it is what gets asserted.
+    """
+    from jwt.algorithms import get_default_algorithms
+
+    assert "RS256" in get_default_algorithms(), (
+        "pyjwt is installed without the crypto extra; RS256 tokens cannot be "
+        "verified. requirements.txt needs pyjwt[crypto]")
+
+
 class TestSubject:
     def test_an_anonymous_caller_has_no_subject(self):
         assert identity.subject({"headers": {}}) is None
