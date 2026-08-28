@@ -79,8 +79,18 @@ jobs:
             echo "Changed files:"
             echo "$CHANGED_FILES"
 
-            # Check if common layer changed
-            if echo "$CHANGED_FILES" | grep -q "^lambdas/common/"; then
+            # Check if the shared layer needs rebuilding.
+            #
+            # requirements.txt counts. The layer is built from it — `pip
+            # install -r requirements.txt` is the packaging step — so a
+            # dependency change that does not also touch lambdas/common/ used
+            # to leave the old layer in place and deploy code against it.
+            #
+            # That is not hypothetical: adding the crypto extra to pyjwt so
+            # Cognito's RS256 tokens could be verified changed only this file,
+            # the layer was never rebuilt, and every signed-in player kept
+            # falling back to anonymous with the fix sitting merged in master.
+            if echo "$CHANGED_FILES" | grep -qE "^lambdas/common/|^requirements\.txt$"; then
               echo "common=true" >> $GITHUB_OUTPUT
             else
               echo "common=false" >> $GITHUB_OUTPUT
