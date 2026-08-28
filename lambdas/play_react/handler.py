@@ -9,6 +9,7 @@ group of four where one person cannot join in is worse than a group of four
 where somebody applauds themselves.
 """
 
+from lambdas.common import identity as identity_mod
 from lambdas.common import plays_dynamo, reactions_dynamo
 from lambdas.common.errors import handle_errors, NotFoundError, ValidationError
 from lambdas.common.logger import get_logger
@@ -24,7 +25,9 @@ HANDLER = 'play_react'
 def handler(event, context):
     body = parse_body(event)
 
-    claims = ((event.get('requestContext') or {}).get('authorizer') or {})
+    # Verified from the bearer token: this route is public, so API Gateway
+    # does not populate claims on it.
+    claims = {'sub': identity_mod.subject(event)}
     reactor = claims.get('sub')
     if not reactor:
         raise ValidationError(

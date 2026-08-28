@@ -6,6 +6,7 @@ player see how they were doing before deciding whether to be identified, which
 is a small thing that quietly distorts a leaderboard.
 """
 
+from lambdas.common import identity as identity_mod
 from lambdas.common import plays_dynamo
 from lambdas.common.errors import handle_errors, NotFoundError, ValidationError
 from lambdas.common.logger import get_logger
@@ -23,7 +24,9 @@ def handler(event, context):
     require_fields(body, 'name')
 
     identity = (body.get('deviceId') or '').strip()
-    claims = ((event.get('requestContext') or {}).get('authorizer') or {})
+    # Verified from the bearer token: this route is public, so API Gateway
+    # does not populate claims on it.
+    claims = {'sub': identity_mod.subject(event)}
     if claims.get('sub'):
         identity = claims['sub']
     if not identity:

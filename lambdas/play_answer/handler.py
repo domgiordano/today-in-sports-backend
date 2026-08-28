@@ -9,6 +9,7 @@ Replaying an index is rejected rather than re-graded, so a player cannot retry a
 question they got wrong by resending it.
 """
 
+from lambdas.common import identity as identity_mod
 from lambdas.common import (
     badges,
     plays_dynamo,
@@ -51,7 +52,9 @@ def handler(event, context):
     require_fields(body, 'index')
 
     identity = (body.get('deviceId') or '').strip()
-    claims = ((event.get('requestContext') or {}).get('authorizer') or {})
+    # Verified from the bearer token: this route is public, so API Gateway
+    # does not populate claims on it.
+    claims = {'sub': identity_mod.subject(event)}
     signed_in = bool(claims.get('sub'))
     if signed_in:
         identity = claims['sub']
