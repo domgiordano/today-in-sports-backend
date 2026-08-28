@@ -37,6 +37,9 @@ STATS_TABLE_NAME = os.environ.get("STATS_TABLE_NAME", f"{APP_NAME}-stats")
 REACTIONS_TABLE_NAME = os.environ.get(
     "REACTIONS_TABLE_NAME", f"{APP_NAME}-reactions")
 REACTIONS_DAY_INDEX = os.environ.get("REACTIONS_DAY_INDEX", "day-index")
+USERNAMES_TABLE_NAME = os.environ.get(
+    "USERNAMES_TABLE_NAME", f"{APP_NAME}-usernames")
+USERNAMES_OWNER_INDEX = os.environ.get("USERNAMES_OWNER_INDEX", "owner-index")
 
 # Indexes
 QUESTIONS_STATUS_INDEX = os.environ.get("QUESTIONS_STATUS_INDEX", "status-mmdd-index")

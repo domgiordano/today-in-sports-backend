@@ -8,6 +8,7 @@ sign-up succeeds and the profile silently does not.
 """
 
 from lambdas.common import badges, users_dynamo
+from lambdas.common import usernames_dynamo
 from lambdas.common.errors import handle_errors, UnauthorizedError
 from lambdas.common.logger import get_logger
 from lambdas.common.utility_helpers import success_response
@@ -33,10 +34,17 @@ def handler(event, context):
 
     held = list(user.get('badges') or [])
 
+    handle = usernames_dynamo.current_for(user_id)
+
     return success_response({
         'userId': user_id,
         'email': user.get('email'),
         'displayName': user.get('displayName'),
+        'username': handle,
+        # Whether the client should stop and ask. Computed here rather than
+        # inferred from two null checks in the UI, so "what counts as
+        # onboarded" has one definition and moves in one place.
+        'needsOnboarding': not (user.get('displayName') and handle),
         'createdAt': user.get('createdAt'),
         'playCount': int(user.get('playCount') or 0),
         'currentStreak': int(user.get('currentStreak') or 0),
