@@ -10,7 +10,7 @@ where somebody applauds themselves.
 """
 
 from lambdas.common import identity as identity_mod
-from lambdas.common import plays_dynamo, reactions_dynamo
+from lambdas.common import notifications_dynamo, plays_dynamo, reactions_dynamo
 from lambdas.common.errors import handle_errors, NotFoundError, ValidationError
 from lambdas.common.logger import get_logger
 from lambdas.common.play_view import today_utc
@@ -57,6 +57,16 @@ def handler(event, context):
     except ValueError as exc:
         raise ValidationError(
             message=str(exc), handler=HANDLER, function='handler')
+
+    # Only on adding one. Clearing a reaction is not news, and telling somebody
+    # that their applause was withdrawn is worse than saying nothing.
+    if now and target != reactor:
+        try:
+            notifications_dynamo.notify(
+                [target], notifications_dynamo.REACTION, reactor,
+                quiz_date=quiz_date, body=now)
+        except Exception as exc:  # noqa: BLE001 - the reaction still stands
+            log.warning(f'reaction saved but notifying failed: {exc}')
 
     return success_response({
         'target': target,

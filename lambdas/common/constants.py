@@ -42,6 +42,8 @@ USERNAMES_TABLE_NAME = os.environ.get(
 USERNAMES_OWNER_INDEX = os.environ.get("USERNAMES_OWNER_INDEX", "owner-index")
 COMMENTS_TABLE_NAME = os.environ.get(
     "COMMENTS_TABLE_NAME", f"{APP_NAME}-comments")
+NOTIFICATIONS_TABLE_NAME = os.environ.get(
+    "NOTIFICATIONS_TABLE_NAME", f"{APP_NAME}-notifications")
 
 # Indexes
 QUESTIONS_STATUS_INDEX = os.environ.get("QUESTIONS_STATUS_INDEX", "status-mmdd-index")
