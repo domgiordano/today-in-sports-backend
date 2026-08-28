@@ -34,6 +34,9 @@ GROUPS_INVITE_INDEX = os.environ.get("GROUPS_INVITE_INDEX", "invite-index")
 ANNOUNCEMENTS_TABLE_NAME = os.environ.get(
     "ANNOUNCEMENTS_TABLE_NAME", f"{APP_NAME}-announcements")
 STATS_TABLE_NAME = os.environ.get("STATS_TABLE_NAME", f"{APP_NAME}-stats")
+REACTIONS_TABLE_NAME = os.environ.get(
+    "REACTIONS_TABLE_NAME", f"{APP_NAME}-reactions")
+REACTIONS_DAY_INDEX = os.environ.get("REACTIONS_DAY_INDEX", "day-index")
 
 # Indexes
 QUESTIONS_STATUS_INDEX = os.environ.get("QUESTIONS_STATUS_INDEX", "status-mmdd-index")

@@ -10,7 +10,8 @@ board is low stakes, and the alternative is refusing to show a visitor their own
 result. Persistent profiles and streaks are what require an account.
 """
 
-from lambdas.common import groups_dynamo, plays_dynamo, users_dynamo
+from lambdas.common import (groups_dynamo, plays_dynamo, reactions_dynamo,
+                            users_dynamo)
 from lambdas.common.errors import NotFoundError, handle_errors
 from lambdas.common.logger import get_logger
 from lambdas.common.utility_helpers import get_query_params, success_response
@@ -54,13 +55,20 @@ def board_name(row, profile_names):
     return (row.get('displayName') or '').strip() or 'Anonymous'
 
 
-def public_row(row, position, profile_names):
+def public_row(row, position, profile_names, counts, mine):
+    play_id = row.get('playId')
     return {
         'position': position,
+        # The identity is what a reaction is addressed to. It is already
+        # public in the sense that it is the key of a row on a public board,
+        # and without it the client cannot say which score it is reacting to.
+        'target': row.get('identity'),
         'name': board_name(row, profile_names),
         'points': int(row.get('totalPoints', 0)),
         'correct': int(row.get('correctCount', 0)),
         'anonymous': bool(row.get('anonymous', True)),
+        'reactions': counts.get(play_id, {}),
+        'yourReaction': mine.get(play_id),
     }
 
 
@@ -92,7 +100,14 @@ def handler(event, context):
     profile_names = users_dynamo.display_names(
         [r.get('identity') for r in rows if not r.get('anonymous', True)])
 
-    board = [public_row(r, i + 1, profile_names) for i, r in enumerate(rows)]
+    # And one query for the day's reactions rather than one per row.
+    counts, by_reactor = reactions_dynamo.for_day(quiz_date)
+
+    viewer = ((event.get('requestContext') or {}).get('authorizer') or {}).get('sub')
+    mine = by_reactor.get(viewer, {}) if viewer else {}
+
+    board = [public_row(r, i + 1, profile_names, counts, mine)
+             for i, r in enumerate(rows)]
 
     # A caller can ask where a specific score would land without being on the
     # visible board — which is how an anonymous player sees their standing.
