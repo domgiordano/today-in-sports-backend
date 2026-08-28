@@ -8,6 +8,7 @@ game can justify holding against a named account.
 """
 
 from lambdas.common import users_dynamo
+from lambdas.common import usernames_dynamo
 from lambdas.common.errors import (
     UnauthorizedError,
     ValidationError,
@@ -40,6 +41,16 @@ def handler(event, context):
         updated = users_dynamo.set_display_name(
             user_id, str(body['displayName']).strip()[:40])
 
+    if 'username' in body:
+        # Claimed before anything else is written. A profile that took the
+        # display name and then failed on the handle would leave the player
+        # half-onboarded with no signal about which half.
+        try:
+            usernames_dynamo.claim(body['username'], user_id)
+        except ValueError as exc:
+            raise ValidationError(message=str(exc), handler=HANDLER,
+                                  function='handler') from exc
+
     if 'country' in body:
         country = body.get('country')
         if not country:
@@ -57,6 +68,7 @@ def handler(event, context):
     user = updated or users_dynamo.get_user(user_id) or {}
     return success_response({
         'displayName': user.get('displayName'),
+        'username': usernames_dynamo.current_for(user_id),
         'country': user.get('country'),
         'subdivision': user.get('subdivision'),
     })
