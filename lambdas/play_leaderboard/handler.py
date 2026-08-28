@@ -10,7 +10,7 @@ board is low stakes, and the alternative is refusing to show a visitor their own
 result. Persistent profiles and streaks are what require an account.
 """
 
-from lambdas.common import groups_dynamo, plays_dynamo
+from lambdas.common import groups_dynamo, plays_dynamo, users_dynamo
 from lambdas.common.errors import NotFoundError, handle_errors
 from lambdas.common.logger import get_logger
 from lambdas.common.utility_helpers import get_query_params, success_response
@@ -23,10 +23,41 @@ HANDLER = 'play_leaderboard'
 DEFAULT_LIMIT = 50
 
 
-def public_row(row, position):
+def board_name(row, profile_names):
+    """
+    What to call whoever played this round.
+
+    A signed-in player is named by their profile, looked up here rather than
+    copied onto the round when it was played. That is what makes a rename
+    retroactive: the name is theirs, not the round's, so changing it in
+    settings changes every board they appear on rather than only the ones they
+    play next.
+
+    An anonymous player has no profile to read, so the name they typed after
+    finishing is stored on the round and used as-is.
+
+    Nothing here derives a name from an email. The client used to fall back to
+    the local part when a signed-in player had set no name, which put an
+    address fragment on a public board.
+    """
+    if not row.get('anonymous', True):
+        # Stripped here as well as at the lookup. A blank name is not a name
+        # wherever it came from, and this function is the last thing between a
+        # stored value and a public page.
+        named = (profile_names.get(row.get('identity')) or '').strip()
+        if named:
+            return named
+        # Signed in but never chose a name. "Anonymous" is wrong — they are not
+        # anonymous, they just have not said what to call them — and their
+        # email is not ours to publish.
+        return 'Unnamed player'
+    return (row.get('displayName') or '').strip() or 'Anonymous'
+
+
+def public_row(row, position, profile_names):
     return {
         'position': position,
-        'name': row.get('displayName') or 'Anonymous',
+        'name': board_name(row, profile_names),
         'points': int(row.get('totalPoints', 0)),
         'correct': int(row.get('correctCount', 0)),
         'anonymous': bool(row.get('anonymous', True)),
@@ -57,7 +88,11 @@ def handler(event, context):
     else:
         rows = plays_dynamo.leaderboard(quiz_date, limit)
 
-    board = [public_row(r, i + 1) for i, r in enumerate(rows)]
+    # One batch read for the whole board rather than a lookup per row.
+    profile_names = users_dynamo.display_names(
+        [r.get('identity') for r in rows if not r.get('anonymous', True)])
+
+    board = [public_row(r, i + 1, profile_names) for i, r in enumerate(rows)]
 
     # A caller can ask where a specific score would land without being on the
     # visible board — which is how an anonymous player sees their standing.
@@ -75,7 +110,9 @@ def handler(event, context):
                 'points': points,
                 'correct': int(session.get('correctCount', 0)),
                 'rank': plays_dynamo.rank_for(quiz_date, points),
-                'name': session.get('displayName'),
+                'name': board_name(session, users_dynamo.display_names(
+                    [session.get('identity')]
+                    if not session.get('anonymous', True) else [])),
                 'anonymous': bool(session.get('anonymous', True)),
             }
 
