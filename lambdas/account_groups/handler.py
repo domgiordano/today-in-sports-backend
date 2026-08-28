@@ -10,8 +10,8 @@ here rather than on the public stats route. Membership is the permission, and
 this is the only endpoint that already knows it.
 """
 
-from lambdas.common import (groups_dynamo, plays_dynamo, stats_dynamo,
-                            usernames_dynamo, users_dynamo)
+from lambdas.common import (groups_dynamo, plays_dynamo, reactions_dynamo,
+                            stats_dynamo, usernames_dynamo, users_dynamo)
 from lambdas.common.play_view import today_utc
 from lambdas.common.errors import handle_errors, UnauthorizedError
 from lambdas.common.logger import get_logger
@@ -44,7 +44,7 @@ def handler(event, context):
     return success_response({
         # The code travels because the caller is already a member of every
         # group in this list.
-        'groups': [_with_stats(g, quiz_date) for g in groups],
+        'groups': [_with_stats(g, quiz_date, user_id) for g in groups],
         'maxMembers': groups_dynamo.MAX_MEMBERS,
     })
 
@@ -57,7 +57,7 @@ STAT_FIELDS = (
 )
 
 
-def _standings(group, quiz_date):
+def _standings(group, quiz_date, viewer_id=None):
     """
     The table: everybody in the group, ranked, and whether they have played
     today.
@@ -78,10 +78,17 @@ def _standings(group, quiz_date):
     today = {s.get('identity'): s
              for s in plays_dynamo.sessions_for(member_ids, quiz_date)}
 
+    # One query for the day rather than one per row. The reaction primitive
+    # already existed on the play board; a group table is where it is actually
+    # wanted, because these are people you know.
+    counts, by_reactor = reactions_dynamo.for_day(quiz_date)
+    mine = by_reactor.get(viewer_id, {}) if viewer_id else {}
+
     rows = []
     for user_id in member_ids:
         profile = profiles.get(user_id) or {}
         session = today.get(user_id) or {}
+        play_id = plays_dynamo.session_key(user_id, quiz_date)
         rows.append({
             'userId': user_id,
             'displayName': profile.get('displayName') or 'Unnamed player',
@@ -96,11 +103,20 @@ def _standings(group, quiz_date):
             # None, not zero: "has not played yet" and "played and scored
             # nothing" are different things and the table should not conflate
             # them at nine in the morning.
-            'todayPoints': (int(session['totalPoints'])
+            # .get, not [ ]: a single malformed row should cost one number,
+            # not the whole group's page.
+            'todayPoints': (int(session.get('totalPoints') or 0)
                             if session.get('completedAt') else None),
             'todayCorrect': (int(session.get('correctCount') or 0)
                              if session.get('completedAt') else None),
             'playedToday': bool(session.get('completedAt')),
+            # Only a finished round can be reacted to. There is nothing to
+            # applaud about a quiz somebody is still halfway through, and
+            # offering the buttons would leak that they had started.
+            'reactions': (counts.get(play_id, {})
+                          if session.get('completedAt') else {}),
+            'yourReaction': (mine.get(play_id)
+                             if session.get('completedAt') else None),
         })
 
     rows.sort(key=lambda r: (-r['totalPoints'], -r['playCount'],
@@ -110,12 +126,12 @@ def _standings(group, quiz_date):
     return rows
 
 
-def _with_stats(group, quiz_date):
+def _with_stats(group, quiz_date, viewer_id=None):
     view = groups_dynamo.public_view(group, include_code=True)
     rollup = stats_dynamo.get_rollup(f"group#{group['groupId']}", 'all')
     # None rather than zeroes: a group that has not played yet has no numbers,
     # and zeroes would read as a real and very bad result.
     view['stats'] = (
         {field: rollup.get(field) for field in STAT_FIELDS} if rollup else None)
-    view['members'] = _standings(group, quiz_date)
+    view['members'] = _standings(group, quiz_date, viewer_id)
     return view

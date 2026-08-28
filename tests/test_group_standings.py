@@ -25,9 +25,11 @@ def _stub(monkeypatch):
     monkeypatch.setattr(h.usernames_dynamo, "current_for", lambda uid: f"{uid}_handle")
 
 
-def stub_data(monkeypatch, profiles, sessions):
+def stub_data(monkeypatch, profiles, sessions, reactions=None):
     monkeypatch.setattr(h.users_dynamo, "profiles", lambda ids: profiles)
     monkeypatch.setattr(h.plays_dynamo, "sessions_for", lambda ids, d: sessions)
+    monkeypatch.setattr(h.reactions_dynamo, "for_day",
+                        lambda d: reactions or ({}, {}))
 
 
 class TestRanking:
@@ -104,3 +106,43 @@ class TestMissingData:
     def test_an_empty_group_has_an_empty_table(self, monkeypatch):
         stub_data(monkeypatch, {}, [])
         assert h._standings({"groupId": "g", "memberIds": set()}, "2026-08-28") == []
+
+
+class TestReactions:
+    def test_a_finished_round_carries_its_reactions(self, monkeypatch, group):
+        group["memberIds"] = {"u1"}
+        stub_data(monkeypatch,
+                  {"u1": {"userId": "u1", "displayName": "A"}},
+                  [{"identity": "u1", "completedAt": "now", "totalPoints": 640,
+                    "correctCount": 4}],
+                  ({"u1#2026-08-28": {"\U0001F525": 2}},
+                   {"me": {"u1#2026-08-28": "\U0001F525"}}))
+        row = h._standings(group, "2026-08-28", viewer_id="me")[0]
+        assert row["reactions"] == {"\U0001F525": 2}
+        assert row["yourReaction"] == "\U0001F525"
+
+    def test_a_round_still_in_progress_offers_nothing_to_react_to(
+            self, monkeypatch, group):
+        """
+        Nothing to applaud about a quiz somebody is halfway through, and
+        offering the buttons would leak that they had started it.
+        """
+        group["memberIds"] = {"u1"}
+        stub_data(monkeypatch,
+                  {"u1": {"userId": "u1", "displayName": "A"}},
+                  [{"identity": "u1", "totalPoints": 200}],
+                  ({"u1#2026-08-28": {"\U0001F525": 2}}, {}))
+        row = h._standings(group, "2026-08-28", viewer_id="me")[0]
+        assert row["reactions"] == {}
+        assert row["yourReaction"] is None
+
+    def test_a_viewer_who_left_none_sees_none_as_theirs(self, monkeypatch, group):
+        group["memberIds"] = {"u1"}
+        stub_data(monkeypatch,
+                  {"u1": {"userId": "u1", "displayName": "A"}},
+                  [{"identity": "u1", "completedAt": "now"}],
+                  ({"u1#2026-08-28": {"\U0001F44F": 1}},
+                   {"someone_else": {"u1#2026-08-28": "\U0001F44F"}}))
+        row = h._standings(group, "2026-08-28", viewer_id="me")[0]
+        assert row["reactions"] == {"\U0001F44F": 1}
+        assert row["yourReaction"] is None
