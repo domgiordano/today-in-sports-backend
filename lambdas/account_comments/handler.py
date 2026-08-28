@@ -44,6 +44,10 @@ def handler(event, context):
             'body': r.get('body'),
             'postedAt': r.get('postedAt'),
             'yours': r.get('authorId') == user_id,
+            # So a comment addressed to the reader can be marked as such
+            # without the client re-parsing the body and reaching a different
+            # answer to the one the server stored.
+            'mentionsYou': user_id in (r.get('mentions') or []),
             'canDelete': comments_dynamo.may_delete(r, user_id, group),
         } for r in rows],
         'maxLength': comments_dynamo.MAX_LENGTH,

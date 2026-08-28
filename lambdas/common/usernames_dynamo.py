@@ -95,6 +95,26 @@ def current_for(user_id):
     return (items[0].get("display") or items[0]["username"]) if items else None
 
 
+def handles_for(user_ids):
+    """
+    {lowercased handle: userId} for the users given.
+
+    Built from the owner index rather than by scanning the table, so it costs
+    one query per member instead of a read of every handle on the app. A group
+    is capped at fifty, and the caller wants only the people in it.
+    """
+    out = {}
+    for user_id in dict.fromkeys(u for u in user_ids if u):
+        resp = _table().query(
+            IndexName=constants.USERNAMES_OWNER_INDEX,
+            KeyConditionExpression=Key("userId").eq(user_id),
+            Limit=1,
+        )
+        for item in resp.get("Items") or []:
+            out[item["username"]] = user_id
+    return out
+
+
 def claim(raw, user_id):
     """
     Take a handle for this user, releasing whatever they held before.

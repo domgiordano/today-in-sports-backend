@@ -6,7 +6,7 @@ membership check, and the thread. Splitting them would duplicate the check,
 and a duplicated permission check is one that eventually disagrees with itself.
 """
 
-from lambdas.common import comments_dynamo, group_access
+from lambdas.common import comments_dynamo, group_access, usernames_dynamo
 from lambdas.common.errors import (ForbiddenError, NotFoundError,
                                    ValidationError, handle_errors)
 from lambdas.common.logger import get_logger
@@ -28,14 +28,22 @@ def handler(event, context):
     action = (body.get('action') or 'post').strip()
 
     if action == 'post':
+        # Resolved against this group's members only. An @handle belonging to
+        # somebody outside resolves to nothing rather than to them — otherwise
+        # a private group becomes a way of reaching anybody whose handle you
+        # can guess.
+        handles = usernames_dynamo.handles_for(group.get('memberIds') or set())
+        mentions = comments_dynamo.find_mentions(body.get('body'), handles)
         try:
             row = comments_dynamo.post(
-                group['groupId'], quiz_date, user_id, body.get('body'))
+                group['groupId'], quiz_date, user_id, body.get('body'),
+                mentions=mentions)
         except ValueError as exc:
             raise ValidationError(message=str(exc), handler=HANDLER,
                                   function='handler') from exc
         return success_response({'commentId': row['commentId'],
-                                 'postedAt': row['postedAt']})
+                                 'postedAt': row['postedAt'],
+                                 'mentioned': mentions})
 
     if action == 'delete':
         comment_id = (body.get('commentId') or '').strip()

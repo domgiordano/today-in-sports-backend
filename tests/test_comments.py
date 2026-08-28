@@ -142,3 +142,65 @@ class TestAccess:
     def test_no_group_id_at_all_answers_the_same_way(self):
         with pytest.raises(NotFoundError):
             group_access.group_for_member("", "u1", "h")
+
+
+class TestMentions:
+    """
+    Who a comment addresses, resolved against who is actually in the group.
+    """
+
+    HANDLES = {"dom": "u1", "sam": "u2", "alex": "u3"}
+
+    def test_a_handle_resolves_to_the_member(self):
+        assert cx.find_mentions("nice one @dom", self.HANDLES) == ["u1"]
+
+    def test_several_are_kept_in_order(self):
+        assert cx.find_mentions("@sam @dom both", self.HANDLES) == ["u2", "u1"]
+
+    def test_mentioning_somebody_twice_addresses_them_once(self):
+        assert cx.find_mentions("@dom and @dom", self.HANDLES) == ["u1"]
+
+    def test_case_does_not_matter(self):
+        assert cx.find_mentions("@DOM", self.HANDLES) == ["u1"]
+
+    def test_a_handle_outside_the_group_resolves_to_nobody(self):
+        """
+        The rule that keeps a private group private. Otherwise it becomes a way
+        of reaching anybody on the app whose handle you can guess.
+        """
+        assert cx.find_mentions("@stranger hello", self.HANDLES) == []
+
+    def test_an_email_is_not_a_mention(self):
+        """
+        Somebody pasting an address should not be addressing anybody.
+
+        Tested against a group where the domain *is* a real handle, because
+        without the lookbehind this passes for the wrong reason — it resolves
+        nothing only until somebody claims the handle "example", and then
+        every address quietly starts mentioning them.
+        """
+        handles = dict(self.HANDLES, example="u9")
+        assert cx.find_mentions("mail me at sam@example.com", handles) == []
+
+    def test_a_handle_must_start_a_word(self):
+        assert cx.find_mentions("x@dom", self.HANDLES) == []
+
+    def test_punctuation_around_a_handle_is_fine(self):
+        assert cx.find_mentions("(@dom), @sam!", self.HANDLES) == ["u1", "u2"]
+
+    def test_a_bare_at_is_not_a_mention(self):
+        assert cx.find_mentions("@ @@ @x", self.HANDLES) == []
+
+    def test_it_stops_at_the_cap(self):
+        """A comment should not be a way of notifying fifty people at once."""
+        handles = {f"u{i}": f"id{i}" for i in range(30)}
+        body = " ".join(f"@u{i}" for i in range(30))
+        assert len(cx.find_mentions(body, handles)) == cx.MAX_MENTIONS
+
+    def test_no_mentions_stores_no_field(self, table):
+        row = cx.post("g1", "2026-08-28", "u1", "nothing to see")
+        assert "mentions" not in row
+
+    def test_mentions_are_stored_with_the_comment(self, table):
+        row = cx.post("g1", "2026-08-28", "u1", "@dom", mentions=["u1"])
+        assert row["mentions"] == ["u1"]
