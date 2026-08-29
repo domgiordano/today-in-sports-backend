@@ -30,6 +30,7 @@ SOURCE_RUNS_TABLE_NAME = os.environ.get("SOURCE_RUNS_TABLE_NAME", f"{APP_NAME}-s
 PLAYS_TABLE_NAME = os.environ.get("PLAYS_TABLE_NAME", f"{APP_NAME}-plays")
 USERS_TABLE_NAME = os.environ.get("USERS_TABLE_NAME", f"{APP_NAME}-users")
 GROUPS_TABLE_NAME = os.environ.get("GROUPS_TABLE_NAME", f"{APP_NAME}-groups")
+FRIENDS_TABLE_NAME = os.environ.get("FRIENDS_TABLE_NAME", f"{APP_NAME}-friends")
 GROUPS_INVITE_INDEX = os.environ.get("GROUPS_INVITE_INDEX", "invite-index")
 ANNOUNCEMENTS_TABLE_NAME = os.environ.get(
     "ANNOUNCEMENTS_TABLE_NAME", f"{APP_NAME}-announcements")
