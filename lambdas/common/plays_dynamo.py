@@ -42,11 +42,15 @@ SESSION_TTL_DAYS = 90
 _dynamo = None
 
 
-def _table():
+def _resource():
     global _dynamo
     if _dynamo is None:
         _dynamo = boto3.resource("dynamodb")
-    return _dynamo.Table(constants.PLAYS_TABLE_NAME)
+    return _dynamo
+
+
+def _table():
+    return _resource().Table(constants.PLAYS_TABLE_NAME)
 
 
 def _now():
@@ -365,3 +369,39 @@ def rank_for(quiz_date, total_points):
         if not key:
             break
     return higher + 1
+
+
+def history(identity, days, today):
+    """
+    This player's own rounds over the last `days` days, newest first.
+
+    No index and no scan: `playId` is `identity#quizDate`, so every key is
+    computable and the whole window is one BatchGetItem. Adding a by-player GSI
+    would duplicate the table to answer a question its primary key already
+    answers.
+
+    Missing days are simply absent rather than returned as zeroes — a day
+    somebody did not play is not a day they scored nothing, and a caller that
+    cannot tell the two apart will draw the second.
+    """
+    wanted = [today - timedelta(days=offset) for offset in range(days)]
+    keys = [{"playId": session_key(identity, d.isoformat())} for d in wanted]
+
+    found = []
+    # BatchGetItem takes 100 keys per call; a year of history would exceed it.
+    for start in range(0, len(keys), 100):
+        chunk = keys[start:start + 100]
+        resp = _resource().batch_get_item(
+            RequestItems={_table().name: {"Keys": chunk}})
+        found.extend(resp.get("Responses", {}).get(_table().name, []))
+
+        # Dynamo returns unprocessed keys under throttling rather than failing.
+        # Dropping them would silently shorten somebody's history.
+        pending = resp.get("UnprocessedKeys") or {}
+        while pending:
+            resp = _resource().batch_get_item(RequestItems=pending)
+            found.extend(resp.get("Responses", {}).get(_table().name, []))
+            pending = resp.get("UnprocessedKeys") or {}
+
+    return sorted((s for s in found if s.get("completedAt")),
+                  key=lambda s: s.get("quizDate") or "", reverse=True)
