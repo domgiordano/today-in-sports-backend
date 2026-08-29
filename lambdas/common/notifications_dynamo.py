@@ -9,6 +9,9 @@ Three rules, and the third is the one doing the work:
 
   * **mentioned** — somebody wrote your handle. Always.
   * **reaction** — somebody reacted to your round. Always; it is about you.
+  * **friend_request** — somebody asked to be your friend. Always; it needs an
+    answer from you, which is the strongest case there is for telling somebody.
+  * **friend_accepted** — somebody said yes. Always; you asked.
   * **reply** — somebody commented on a day you have already commented on.
     *Not* every comment to every member. In a group of fifty, notifying
     everybody about every comment is fifty notifications for one sentence, and
@@ -33,6 +36,8 @@ log = get_logger(__file__)
 MENTION = "mention"
 REACTION = "reaction"
 REPLY = "reply"
+FRIEND_REQUEST = "friend_request"
+FRIEND_ACCEPTED = "friend_accepted"
 
 # A preview long enough to know whether it is worth opening.
 PREVIEW_LENGTH = 120
