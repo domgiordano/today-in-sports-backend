@@ -1,0 +1,59 @@
+name: Run a cron now
+
+# The nightly jobs are idempotent: each recomputes from a full scan and
+# overwrites its result. Running one early is the same work, sooner — which is
+# what makes an on-demand trigger safe to have at all.
+#
+# It exists because the alternative when a rollup is stale is either waiting
+# for the night or handing somebody AWS credentials, and the second is a worse
+# habit than this workflow is a risk.
+on:
+  workflow_dispatch:
+    inputs:
+      job:
+        description: "Which nightly job to run"
+        required: true
+        type: choice
+        options:
+          - rollup-stats
+          - ingest-recent
+          - assemble-quizzes
+          - publish-quizzes
+
+concurrency:
+  group: run-cron-${{ inputs.job }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write # mint the OIDC token traded for the deploy role
+
+jobs:
+  invoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: Invoke ${{ inputs.job }}
+        run: |
+          # RequestResponse, not Event: the point is to see what it did. An
+          # async invoke would report success for a job that threw.
+          set -o pipefail
+          aws lambda invoke \
+            --function-name "today-in-sports-cron-${{ inputs.job }}" \
+            --invocation-type RequestResponse \
+            --cli-binary-format raw-in-base64-out \
+            --payload '{}' \
+            /tmp/out.json | tee /tmp/meta.json
+
+          # A Lambda that raises still returns HTTP 200 with FunctionError set,
+          # so the exit code of `invoke` proves nothing on its own.
+          if grep -q FunctionError /tmp/meta.json; then
+            echo "::error::the job raised"
+            cat /tmp/out.json
+            exit 1
+          fi
+          cat /tmp/out.json
