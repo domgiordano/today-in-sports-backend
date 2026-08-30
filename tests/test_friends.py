@@ -180,3 +180,38 @@ class TestTheWireFormat:
         src = inspect.getsource(fd)
         assert "meta.client.transact_write_items" not in src
         assert "boto3.client(" in src
+
+
+class TestTheBoardNamesPeople:
+    """
+    `usernames_dynamo.handles_for` returns {handle: userId} — it exists to
+    resolve @mentions, which go the other way round. Reading it as
+    {userId: handle} returns None for every single person and fails silently,
+    which is exactly what shipped: a friends page where every handle was blank.
+    """
+
+    def _out(self, monkeypatch):
+        import json
+        from lambdas.account_friends import handler as h
+
+        monkeypatch.setattr(h.group_access, 'caller', lambda e, n: 'me')
+        monkeypatch.setattr(h, 'today_utc', lambda: '2026-08-30')
+        monkeypatch.setattr(h.friends_dynamo, 'for_user',
+                            lambda u: [{'friendId': 'u2', 'status': 'accepted'}])
+        monkeypatch.setattr(h.users_dynamo, 'profiles',
+                            lambda ids: {'me': {'displayName': 'Me'},
+                                         'u2': {'displayName': 'Ann'}})
+        # Keyed by handle, as the real function returns it.
+        monkeypatch.setattr(h.usernames_dynamo, 'handles_for',
+                            lambda ids: {'ann': 'u2', 'mine': 'me'})
+        monkeypatch.setattr(h.plays_dynamo, 'get_session', lambda i, d: None)
+        return json.loads(h.handler({}, None)['body'])
+
+    def test_a_friend_carries_their_handle(self, monkeypatch):
+        out = self._out(monkeypatch)
+        assert out['friends'][0]['username'] == 'ann'
+
+    def test_you_carry_yours_on_the_board(self, monkeypatch):
+        out = self._out(monkeypatch)
+        mine = [r for r in out['board'] if r['isYou']][0]
+        assert mine['username'] == 'mine'
