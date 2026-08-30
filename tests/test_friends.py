@@ -45,15 +45,9 @@ class FakeClient:
 @pytest.fixture
 def store(monkeypatch):
     table = FakeTable()
-
-    class Meta:
-        client = FakeClient(table)
-
-    class Resource:
-        meta = Meta()
-
+    fake = FakeClient(table)
     monkeypatch.setattr(fd, "_table", lambda: table)
-    monkeypatch.setattr(fd, "_resource", lambda: Resource())
+    monkeypatch.setattr(fd, "client", lambda: fake)
     return table
 
 
@@ -157,3 +151,32 @@ class TestCounts:
         fd.accept("cal", "ann")
         fd.request("dee", "ann")
         assert fd.counts("ann") == {"accepted": 1, "incoming": 1, "outgoing": 1}
+
+
+class TestTheWireFormat:
+    """
+    A fake client cannot catch a serialisation bug — it accepts whatever it is
+    given. These pin the shape instead, because the real failure was attributes
+    arriving typed twice:
+
+        Type mismatch for key userId expected: S actual: M
+
+    caused by using `_resource().meta.client`, which carries boto3's document
+    transformer and types them again on the way out.
+    """
+
+    def test_attributes_are_typed_exactly_once(self):
+        item = fd._ddb(fd._row("ann", "bob", fd.PENDING_OUT, "2026-08-30T00:00:00Z"))
+        assert item["userId"] == {"S": "ann"}
+        assert item["friendId"] == {"S": "bob"}
+        # Not {"M": {"S": ...}} — that is what double-typing produces.
+        assert all(set(v) == {"S"} for v in item.values())
+        assert all(isinstance(v["S"], str) for v in item.values())
+
+    def test_writes_go_through_a_client_without_a_transformer(self):
+        # `client()` must not be the resource's client. Reaching for
+        # `_resource().meta.client` is the exact mistake that shipped.
+        import inspect
+        src = inspect.getsource(fd)
+        assert "meta.client.transact_write_items" not in src
+        assert "boto3.client(" in src

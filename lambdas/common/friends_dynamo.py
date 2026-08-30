@@ -40,6 +40,7 @@ ACCEPTED = "accepted"
 MAX_FRIENDS = 150
 
 _dynamo = None
+_client = None
 
 
 def _resource():
@@ -51,6 +52,26 @@ def _resource():
 
 def _table():
     return _resource().Table(constants.FRIENDS_TABLE_NAME)
+
+
+def client():
+    """
+    A plain low-level client, deliberately NOT `_resource().meta.client`.
+
+    The resource's client carries boto3's document transformer, which serialises
+    Python values into DynamoDB types on the way out. Handing it attributes that
+    are already typed gets them typed twice, so `{"S": "..."}` arrives as
+    `{"M": {"S": "..."}}` and the write fails with
+
+        Type mismatch for key userId expected: S actual: M
+
+    A standalone client has no transformer, so the explicit types below are the
+    ones that reach DynamoDB.
+    """
+    global _client
+    if _client is None:
+        _client = boto3.client("dynamodb")
+    return _client
 
 
 def _now():
@@ -113,7 +134,7 @@ def request(user_id, target_id):
         raise ValueError(f"you can have at most {MAX_FRIENDS} friends")
 
     now = _now()
-    _resource().meta.client.transact_write_items(TransactItems=[
+    client().transact_write_items(TransactItems=[
         {"Put": {"TableName": constants.FRIENDS_TABLE_NAME,
                  "Item": _ddb(_row(user_id, target_id, PENDING_OUT, now))}},
         {"Put": {"TableName": constants.FRIENDS_TABLE_NAME,
@@ -134,7 +155,7 @@ def accept(user_id, requester_id):
         raise ValueError("no request from that player to accept")
 
     now = _now()
-    _resource().meta.client.transact_write_items(TransactItems=[
+    client().transact_write_items(TransactItems=[
         {"Put": {"TableName": constants.FRIENDS_TABLE_NAME,
                  "Item": _ddb(_row(user_id, requester_id, ACCEPTED, now))}},
         {"Put": {"TableName": constants.FRIENDS_TABLE_NAME,
@@ -150,7 +171,7 @@ def remove(user_id, other_id):
     Removing from one side only would leave the other person still seeing a
     friend who cannot see them, which is worse than either state.
     """
-    _resource().meta.client.transact_write_items(TransactItems=[
+    client().transact_write_items(TransactItems=[
         {"Delete": {"TableName": constants.FRIENDS_TABLE_NAME,
                     "Key": {"userId": {"S": user_id}, "friendId": {"S": other_id}}}},
         {"Delete": {"TableName": constants.FRIENDS_TABLE_NAME,
