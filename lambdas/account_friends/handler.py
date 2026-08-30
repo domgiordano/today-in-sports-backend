@@ -45,7 +45,12 @@ def handler(event, context):
     # Everybody named, in one batch each, rather than a read per person.
     ids = [r['friendId'] for r in rows] + [user_id]
     profiles = users_dynamo.profiles(ids)
-    handles = usernames_dynamo.handles_for(ids)
+    # `handles_for` is keyed BY HANDLE — it exists to resolve @mentions, which
+    # go the other way. Inverted here rather than called per person: it already
+    # costs one query each, so this is the same work with one dict instead of a
+    # lookup that silently returns None for every user.
+    handles = {uid: handle
+               for handle, uid in usernames_dynamo.handles_for(ids).items()}
 
     quiz_date = today_utc()
     sessions = {i: plays_dynamo.get_session(i, quiz_date) for i in ids}
