@@ -191,53 +191,55 @@ NBA_1953 = {"Sacramento Kings": [["Rochester Royals", 1945, 1957]],
             "Atlanta Hawks": [["Milwaukee Hawks", 1951, 1955]]}
 
 
+# Three more clubs that existed in 1953, so the history question has its pool.
+NBA_1953_POOL = dict(NBA_1953, **{
+    "Boston Celtics": [["Boston Celtics", 1946, 9999]],
+    "New York Knicks": [["New York Knicks", 1946, 9999]],
+    "Los Angeles Lakers": [["Minneapolis Lakers", 1947, 1960]],
+})
+
+
+def nba_ctx(franchises, season):
+    return {"nba_franchises": franchises, "nba_by_season": {season: list(franchises)}}
+
+
 def test_an_old_basketball_question_names_the_clubs_as_they_were_called():
     """
     balldontlie returns the modern franchise for a 1953 game, so naming the
     clubs used to assert two cities neither had reached and basketball went
     unnamed before 2015. The franchise histories resolve it instead.
     """
-    from lambdas.common.templates import winter_templates as tpl
-    [q] = tpl.nba_blowout_margin(nba_event(1953), {"nba_franchises": NBA_1953})
-    assert "Rochester Royals" in q["prompt"]
+    from lambdas.common.templates import history_templates as tpl
+    [q] = tpl.nba_history(nba_event(1953), nba_ctx(NBA_1953_POOL, 1953))
+    assert q["answer"] == "Rochester Royals"
     assert "Milwaukee Hawks" in q["prompt"]
-    assert "Sacramento" not in q["prompt"]
-    assert "Atlanta" not in q["prompt"]
-    # The beaten side's score, not the margin: stating the scoreline and asking
-    # for the margin put the answer in the prompt.
-    assert q["numericAnswer"] == 61
+    assert "Sacramento" not in q["prompt"] + str(q["distractors"])
+    assert "Atlanta" not in q["prompt"] + str(q["distractors"])
+    assert "Minneapolis Lakers" in q["distractors"]
 
 
-def test_a_club_the_source_cannot_place_is_still_left_unnamed():
+def test_a_club_the_source_cannot_place_asks_nothing():
     """
     balldontlie attaches the modern Denver Nuggets to games from 1949, eighteen
-    years before that franchise existed. Resolving to nothing must still mean
-    naming nothing.
+    years before that franchise existed. The answer is a club name, so a club
+    nobody can name means no question rather than a guessed one.
     """
-    from lambdas.common.templates import winter_templates as tpl
-    ctx = {"nba_franchises": {"Denver Nuggets": [["Denver Nuggets", 1967, 9999]],
-                              "Atlanta Hawks": [["Milwaukee Hawks", 1951, 1955]]}}
-    [q] = tpl.nba_blowout_margin(nba_event(1949, winningTeam="Denver Nuggets"),
-                                 ctx)
-    assert "Nuggets" not in q["prompt"]
-    assert "an NBA game" in q["prompt"]
+    from lambdas.common.templates import history_templates as tpl
+    franchises = dict(NBA_1953_POOL, **{"Denver Nuggets": [["Denver Nuggets", 1967, 9999]]})
+    event = nba_event(1949, winningTeam="Denver Nuggets")
+    assert tpl.nba_history(event, nba_ctx(franchises, 1949)) == []
 
 
 def test_a_modern_basketball_question_still_names_them():
-    from lambdas.common.templates import winter_templates as tpl
+    from lambdas.common.templates import history_templates as tpl
     modern = {"Sacramento Kings": [["Sacramento Kings", 1985, 9999]],
-              "Atlanta Hawks": [["Atlanta Hawks", 1968, 9999]]}
-    [q] = tpl.nba_blowout_margin(nba_event(2022), {"nba_franchises": modern})
-    assert "Sacramento Kings" in q["prompt"]
-
-
-def test_an_old_combined_points_question_names_them_correctly():
-    from lambdas.common.templates import winter_templates as tpl
-    [q] = tpl.nba_combined_points(nba_event(1953, reason="nba_low_score"),
-                                  {"nba_franchises": NBA_1953})
-    assert "Rochester Royals" in q["prompt"]
-    assert "Sacramento" not in q["prompt"]
-    assert "low-scoring" in q["prompt"]
+              "Atlanta Hawks": [["Atlanta Hawks", 1968, 9999]],
+              "Boston Celtics": [["Boston Celtics", 1946, 9999]],
+              "New York Knicks": [["New York Knicks", 1946, 9999]],
+              "Chicago Bulls": [["Chicago Bulls", 1966, 9999]]}
+    [q] = tpl.nba_history(nba_event(2022), nba_ctx(modern, 2022))
+    assert q["answer"] == "Sacramento Kings"
+    assert "Atlanta Hawks" in q["prompt"]
 
 
 def test_an_old_who_won_question_uses_era_names_for_answer_and_distractors():

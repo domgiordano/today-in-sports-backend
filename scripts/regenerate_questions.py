@@ -91,7 +91,7 @@ def main():
     print(f"events         : {len(events)}")
     print(f"questions today: {len(existing)}")
 
-    fresh = regeneration.regenerate(events)
+    fresh = regeneration.regenerate(events, regeneration.load_franchises())
 
     valid = [q for q in fresh if not mlb_tpl.validate(q)]
     print(f"regenerated    : {len(fresh)}  ({len(valid)} valid)")
@@ -105,7 +105,8 @@ def main():
     regenerated_slots = regeneration.slots(valid)
     superseded = [q for q in existing
                   if q["questionId"] not in new_ids
-                  and (q.get("sourceEventId"), q.get("type")) in regenerated_slots]
+                  and ((q.get("sourceEventId"), q.get("type")) in regenerated_slots
+                       or regeneration.retired(q))]
 
     print(f"  new          : {len(added)}")
     print(f"  unchanged    : {len(valid) - len(added)}")

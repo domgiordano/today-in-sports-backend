@@ -21,7 +21,7 @@ from datetime import date, datetime, timedelta, timezone
 
 import boto3
 
-from lambdas.common import constants
+from lambdas.common import constants, events_dynamo
 from lambdas.common.errors import handle_errors
 from lambdas.common.logger import get_logger
 from lambdas.common.notability import f1 as f1_nb
@@ -37,6 +37,7 @@ from lambdas.common.sources import mlb as mlb_src
 from lambdas.common.sources import nba_franchises
 from lambdas.common.sources import nflverse as nfl_src
 from lambdas.common.sources import nhl as nhl_src
+from lambdas.common.templates import history_templates as history_tpl
 from lambdas.common.templates import mlb_templates as mlb_tpl
 from lambdas.common.templates import winter_templates as winter_tpl
 from lambdas.common.utility_helpers import success_response
@@ -225,13 +226,17 @@ def handler(event, context):
     # Questions need their sport's own templates; reason codes are not unique
     # across sports, so the two template sets are kept apart deliberately.
     # winter_templates covers everything that is not baseball.
+    franchises = nba_franchises.load(CACHE_DIR)
     questions = []
     for e in mlb_events:
         questions.extend(mlb_tpl.generate([e], mlb_games))
     questions.extend(winter_tpl.generate(
-        winter_events,
-        winter_tpl.build_context(winter_events,
-                                 nba_franchises.load(CACHE_DIR))))
+        winter_events, winter_tpl.build_context(winter_events, franchises)))
+    # The pools reach into stored events from the same seasons; this week's
+    # games alone rarely name three other clubs in the same competition.
+    history_ctx = history_tpl.build_context(
+        events_dynamo.same_seasons(all_events) + all_events, franchises)
+    questions.extend(history_tpl.generate(all_events, history_ctx))
 
     valid = [q for q in questions if not mlb_tpl.validate(q)]
     dropped = len(questions) - len(valid)

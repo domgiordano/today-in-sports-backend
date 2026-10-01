@@ -18,6 +18,14 @@ added.
 Only the missing slots are refilled. A quiz that still resolves is left exactly
 as it is, because a published quiz somebody may already have played should not
 silently become a different quiz.
+
+    python scripts/repair_quizzes.py --retired --apply
+
+`--retired` also refills slots holding a rejected question, on days after today
+only - today is being played and the past has been. A replacement drawn from the
+same event is preferred, so swapping a retired score question for the "which
+team did it" question about the same game leaves the day's sport and tier as
+they were.
 """
 
 import argparse
@@ -49,7 +57,10 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--apply", action="store_true")
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--retired", action="store_true",
+                    help="also refill future slots holding a rejected question")
     args = ap.parse_args()
+    today = datetime.now(timezone.utc).date().isoformat()
 
     dynamo = boto3.resource("dynamodb")
     quizzes_table = dynamo.Table(constants.QUIZZES_TABLE_NAME)
@@ -64,10 +75,16 @@ def main():
     # cannot hand one day's quiz a question another day is holding.
     spoken_for = {qid for z in quizzes for qid in (z.get("questionIds") or [])}
 
+    def gone(qid, quiz_date):
+        if qid not in by_id:
+            return True
+        return (args.retired and quiz_date > today
+                and by_id[qid].get("status") == "rejected")
+
     repaired = 0
     for quiz in sorted(quizzes, key=lambda z: z["quizDate"]):
         ids = quiz.get("questionIds") or []
-        missing = [q for q in ids if q not in by_id]
+        missing = [q for q in ids if gone(q, quiz["quizDate"])]
         if not missing:
             continue
 
@@ -78,14 +95,17 @@ def main():
         # Fill each gap the way the assembler would have: strongest candidate,
         # preferring a sport and a format the surviving questions do not
         # already cover.
-        kept = [by_id[q] for q in ids if q in by_id]
+        kept = [by_id[q] for q in ids if not gone(q, quiz["quizDate"])]
         chosen_sports = {q["sport"] for q in kept}
         chosen_types = collections.Counter(q.get("type") for q in kept)
 
         replacements = []
         available = list(pool)
-        for _ in missing:
-            pick = assembler._best(available, chosen_sports, chosen_types)
+        for qid in missing:
+            event_id = by_id.get(qid, {}).get("sourceEventId")
+            same_event = [q for q in available if q.get("sourceEventId") == event_id]
+            pick = (assembler._best(same_event, chosen_sports, chosen_types)
+                    or assembler._best(available, chosen_sports, chosen_types))
             if not pick:
                 break
             replacements.append(pick)
@@ -99,7 +119,8 @@ def main():
             continue
 
         queue = list(replacements)
-        new_ids = [q if q in by_id else queue.pop(0)["questionId"] for q in ids]
+        new_ids = [queue.pop(0)["questionId"] if gone(q, quiz["quizDate"]) else q
+                   for q in ids]
 
         print(f"  {quiz['quizDate']}  {quiz.get('status'):9s} "
               f"{len(missing)} replaced")

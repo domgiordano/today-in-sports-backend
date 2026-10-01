@@ -74,7 +74,7 @@ def main():
 
     events = scan(dynamo.Table(constants.EVENTS_TABLE_NAME))
     events = [_plain(e) for e in events]
-    fresh = regeneration.regenerate(events)
+    fresh = regeneration.regenerate(events, regeneration.load_franchises())
     fresh_ids = {q["questionId"] for q in fresh}
     regenerated_slots = regeneration.slots(fresh)
     print(f"ids the templates produce today: {len(fresh_ids)}")
@@ -85,7 +85,7 @@ def main():
     stale, kept = [], []
     for q in questions:
         slot = (q.get("sourceEventId"), q.get("type"))
-        if slot not in regenerated_slots:
+        if slot not in regenerated_slots and not regeneration.retired(q):
             continue
         if q["questionId"] in fresh_ids:
             continue

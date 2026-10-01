@@ -15,7 +15,10 @@ its slot is one of these and its id is not among these. Both halves of that
 sentence come from here.
 """
 
-from lambdas.common.templates import mlb_templates as mlb_tpl
+import os
+
+from lambdas.common.sources import nba_franchises
+from lambdas.common.templates import history_templates as history_tpl
 from lambdas.common.templates import ordering_templates as ord_tpl
 from lambdas.common.templates import transaction_templates as tx_tpl
 from lambdas.common.templates import winter_templates as winter_tpl
@@ -30,33 +33,51 @@ WINTER_SPORTS = ("nhl", "nba", "soccer", "nfl", "f1")
 TRANSACTION_REASONS = {"star_free_agent", "star_trade", "blockbuster_trade",
                        "star_purchase", "landmark_sale", "star_drafted"}
 
-# Baseball templates that need no distractor pool, and so can be rebuilt from
-# events alone. The rest draw their wrong answers from that day's *other
-# games*, which the events table cannot supply; regenerating those here would
-# hand them a thinner pool than they were built with, so they are left to
-# `generate_questions.py` and the Retrosheet archive.
-MLB_CONTEXT_FREE = ("numeric_blowout_margin",)
+# Score-arithmetic questions ("how many goals did they put past them?"),
+# replaced by the "which team did it" questions in history_templates. No
+# template produces these any more, so they occupy no regenerated slot and
+# would never be judged superseded on that rule alone - this names them.
+RETIRED_NUMERIC = {
+    "mlb": {"blowout", "slugfest", "postseason_shutout",
+            "world_series_game", "world_series_game7"},
+    "nba": {"nba_blowout", "nba_playoff_blowout", "nba_shootout", "nba_low_score"},
+    "nfl": {"regular_season_blowout", "regular_season_shootout", "rock_fight",
+            "super_bowl"},
+    "soccer": {"soccer_big_win", "soccer_goal_fest"},
+}
 
 
-def regenerate(events):
-    """Every question the templates produce today, from `events`."""
+def retired(question):
+    return (question.get("type") == "numeric"
+            and question.get("sourceReason") in RETIRED_NUMERIC.get(question.get("sport"), ()))
+
+
+def load_franchises():
+    """The NBA name history from the local cache both scripts share."""
+    return nba_franchises.load(os.environ.get("TIS_CACHE", os.path.expanduser("~/.cache/tis")))
+
+
+def regenerate(events, franchises=None):
+    """
+    Every question the templates produce today, from `events`.
+
+    `franchises` is the NBA name history. Without it no basketball question
+    can name a club, so neither the winter nor the history templates produce
+    one.
+    """
     winter = [e for e in events if e.get("sport") in WINTER_SPORTS]
     transactions = [e for e in events
                     if e.get("sport") == "mlb"
                     and e.get("reason") in TRANSACTION_REASONS]
 
-    out = list(winter_tpl.generate(winter, winter_tpl.build_context(winter)))
+    out = list(winter_tpl.generate(winter, winter_tpl.build_context(winter, franchises)))
+    out += history_tpl.generate(events, history_tpl.build_context(events, franchises))
     if transactions:
         out += tx_tpl.generate(transactions, tx_tpl.build_context(transactions))
 
     # Clue ladders build their rungs from the event alone.
     for event in events:
         out.extend(ord_tpl.clue_ladder(event))
-
-    for name in MLB_CONTEXT_FREE:
-        template = getattr(mlb_tpl, name)
-        for event in (e for e in events if e.get("sport") == "mlb"):
-            out.extend(template(event, {}))
 
     return out
 

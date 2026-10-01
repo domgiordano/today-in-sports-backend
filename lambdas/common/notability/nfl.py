@@ -25,6 +25,13 @@ per season so the fire rate can be checked rather than guessed:
     one-point game         10.9/season
 """
 
+# Regular-season thresholds. Named because the history templates count the
+# games that cleared them: every regular-season game past one of these is
+# guaranteed an event, which is what lets a season superlative be proved.
+BLOWOUT_MARGIN = 35
+SHOOTOUT_POINTS = 80
+ROCK_FIGHT_POINTS = 13
+
 
 def _base(game, reason, score, title, facts):
     y, m, d = game["gameDate"].split("-")
@@ -145,7 +152,7 @@ def detect_regular_season_blowout(game):
     Decided by 35 or more. Set above the playoff threshold of 28 on purpose:
     28 fires 19 times a season in the regular season and stops being notable.
     """
-    if game.get("isPlayoff") or (game.get("margin") or 0) < 35:
+    if game.get("isPlayoff") or (game.get("margin") or 0) < BLOWOUT_MARGIN:
         return []
     w, l = _sides(game)
     f = _facts(game, w, l)
@@ -171,7 +178,7 @@ def detect_regular_season_overtime(game):
 
 def detect_regular_season_shootout(game):
     """Combined 80+ outside the playoffs — 2.8 a season."""
-    if game.get("isPlayoff") or (game.get("combinedPoints") or 0) < 80:
+    if game.get("isPlayoff") or (game.get("combinedPoints") or 0) < SHOOTOUT_POINTS:
         return []
     w, l = _sides(game)
     f = _facts(game, w, l)
@@ -182,7 +189,7 @@ def detect_regular_season_shootout(game):
 
 def detect_rock_fight(game):
     """The opposite extreme: 13 points or fewer between them, 2.0 a season."""
-    if game.get("isPlayoff") or (game.get("combinedPoints") or 99) > 13:
+    if game.get("isPlayoff") or (game.get("combinedPoints") or 99) > ROCK_FIGHT_POINTS:
         return []
     w, l = _sides(game)
     f = _facts(game, w, l)
