@@ -10,7 +10,6 @@ not, which is what makes the multiple-choice type actually hard.
 """
 
 import hashlib
-from lambdas.common.templates import phrasing
 
 CURRENT_YEAR = 2026
 
@@ -112,28 +111,6 @@ def numeric_marathon_innings(event, ctx):
                numericAnswer=f["innings"], tolerance=2)]
 
 
-def numeric_postseason_shutout(event, ctx):
-    if event["reason"] != "postseason_shutout":
-        return []
-    f = event["facts"]
-    return [_q(event, "numeric",
-               f"In {f['gameRef']} on "
-               f"{pretty_date(event['gameDate'])}, the {f['winningTeam']} shut out the "
-               f"{f['losingTeam']}. How many runs did the {f['winningTeam']} score?",
-               f["winningRuns"], numericAnswer=f["winningRuns"], tolerance=1)]
-
-
-def numeric_slugfest(event, ctx):
-    if event["reason"] != "slugfest":
-        return []
-    f = event["facts"]
-    return [_q(event, "numeric",
-               f"On {pretty_date(event['gameDate'])}, the {f['awayTeam']} and "
-               f"{f['homeTeam']} produced the highest-scoring game of the day. "
-               f"How many runs did the two teams score combined?",
-               f["combinedRuns"], numericAnswer=f["combinedRuns"], tolerance=4)]
-
-
 def mc_postseason_winner(event, ctx):
     """Which team won a given postseason game — distractors from that day/era."""
     if event["reason"] not in ("postseason_extra_innings", "postseason_shutout",
@@ -166,29 +143,6 @@ def mc_combined_no_hitter(event, ctx):
                f"{f.get('pitchersUsed', 'multiple')} pitchers combined on a no-hitter "
                f"against the {f['noHitTeam']}. Which team's staff did it?",
                f["throwingTeam"], distractors=pool[:3])]
-
-
-def numeric_blowout_runs(event, ctx):
-    if event["reason"] != "blowout":
-        return []
-    f = event["facts"]
-    return [_q(event, "numeric",
-               f"On {pretty_date(event['gameDate'])}, the {f['scoringTeam']} put up a "
-               f"huge number against the {f['opponent']}. How many runs did they score?",
-               f["runs"], numericAnswer=f["runs"], tolerance=3)]
-
-
-def numeric_ws_margin(event, ctx):
-    if event["reason"] not in ("world_series_game7", "world_series_game"):
-        return []
-    f = event["facts"]
-    if f.get("winningRuns") is None:
-        return []
-    return [_q(event, "numeric",
-               f"In World Series Game {f['gameNumber']} on {pretty_date(event['gameDate'])}, "
-               f"the {f['winningTeam']} beat the {f['losingTeam']}. "
-               f"How many runs did the {f['winningTeam']} score?",
-               f["winningRuns"], numericAnswer=f["winningRuns"], tolerance=1)]
 
 
 # ---------------------------------------------------------------- multiple choice
@@ -245,48 +199,9 @@ def numeric_one_nothing_innings(event, ctx):
                f["innings"], numericAnswer=f["innings"], tolerance=1)]
 
 
-def numeric_blowout_margin(event, ctx):
-    """
-    A second angle on blowouts so one event yields more than one question.
-
-    It asks for the beaten side's score rather than the margin. Stating the
-    scoreline and asking for the margin — which is what this did — is a
-    subtraction test with a sports fact attached: the answer was written in the
-    prompt two words earlier. Giving one side and asking for the other keeps
-    the anchor, because knowing the winner put up 20 tells you what kind of
-    game it was, without handing over the number being asked for.
-    """
-    if event["reason"] != "blowout":
-        return []
-    f = event["facts"]
-    if f.get("opponentRuns") is None:
-        return []
-    margin = f["runs"] - f["opponentRuns"]
-    if margin < 10:
-        return []
-    conceded = f["opponentRuns"]
-    date = pretty_date(event["gameDate"])
-    prompt = phrasing.pick([
-        (f"On {date}, the {f['scoringTeam']} put {f['runs']} runs on the "
-         f"{f['opponent']}. How many did the {f['opponent']} manage in reply?"),
-        (f"The {f['scoringTeam']} scored {f['runs']} against the {f['opponent']} "
-         f"on {date}. What did the {f['opponent']} finish on?"),
-        (f"On {date}, the {f['opponent']} were on the wrong end of a "
-         f"{f['runs']}-run afternoon from the {f['scoringTeam']}. How many did "
-         f"they score themselves?"),
-    ], event["gameId"], "blowout_margin", conceded)
-    return [_q(event, "numeric", prompt, conceded,
-               numericAnswer=conceded, tolerance=1)]
-
-
 TEMPLATES = [
     numeric_marathon_innings,
     numeric_one_nothing_innings,
-    numeric_blowout_margin,
-    numeric_blowout_runs,
-    numeric_ws_margin,
-    numeric_postseason_shutout,
-    numeric_slugfest,
     mc_no_hitter_pitcher,
     mc_no_hit_team,
     mc_combined_no_hitter,
@@ -326,6 +241,8 @@ def validate(q):
     # cosmetic one, and must never survive to review.
     if "None" in q.get("prompt", ""):
         problems.append("null interpolated into prompt")
+    if "reveal" in q and (not q["reveal"] or "None" in q["reveal"]):
+        problems.append("empty or null reveal")
     # An unresolved source id reaching a prompt reads as nonsense to a player
     # and is indistinguishable from a real name to the generator.
     #

@@ -44,23 +44,29 @@ def test_the_coupled_scripts_call_the_shared_regenerator(script):
 
 
 class TestRegenerate:
-    def _event(self, **kw):
+    def _event(self, game_id="g1", winner="Liverpool FC", loser="Norwich City FC", **kw):
         base = {
-            "sport": "nba", "league": "NBA", "reason": "nba_blowout",
-            "gameId": "g1", "gameDate": "2020-08-29", "mmdd": "08-29",
-            "year": 2020, "sourceName": "balldontlie", "sourceDatasetRef": "r",
-            "facts": {"winningTeam": "Houston Rockets",
-                      "losingTeam": "Oklahoma City Thunder",
-                      "winningScore": 114, "losingScore": 80, "margin": 34},
+            "sport": "soccer", "league": "EPL", "leagueId": "en.1",
+            "reason": "soccer_big_win", "gameId": game_id,
+            "gameDate": "2019-08-09", "mmdd": "08-09", "year": 2019,
+            "sourceName": "football_json", "sourceDatasetRef": "r",
+            "facts": {"winningTeam": winner, "losingTeam": loser,
+                      "winningScore": 6, "losingScore": 0, "margin": 6,
+                      "competition": "English Premier League 2019/20"},
         }
         base.update(kw)
         return base
 
+    def _events(self):
+        """One event to ask about, and a season of clubs to draw distractors from."""
+        return [self._event(),
+                self._event("g2", "Manchester City FC", "Watford FC"),
+                self._event("g3", "Chelsea FC", "Everton FC")]
+
     def test_it_produces_questions_from_events_alone(self):
         """No source archive, no games table — the events are the input."""
-        out = regeneration.regenerate([self._event()])
-        assert out
-        assert all(q.get("sourceEventId") == "g1" for q in out)
+        out = regeneration.regenerate(self._events())
+        assert {q.get("sourceEventId") for q in out} == {"g1", "g2", "g3"}
 
     def test_every_question_lands_in_a_slot_it_reports(self):
         """
@@ -68,7 +74,7 @@ class TestRegenerate:
         a slot regenerate claims, or the prune would delete it as superseded by
         itself.
         """
-        out = regeneration.regenerate([self._event()])
+        out = regeneration.regenerate(self._events())
         slots = regeneration.slots(out)
         assert all((q.get("sourceEventId"), q.get("type")) in slots for q in out)
 
@@ -80,6 +86,34 @@ class TestRegenerate:
         Ids hash the prompt, so an unstable phrasing choice would mint new
         questions on every run and supersede the ones written a moment earlier.
         """
-        first = {q["questionId"] for q in regeneration.regenerate([self._event()])}
-        second = {q["questionId"] for q in regeneration.regenerate([self._event()])}
+        first = {q["questionId"] for q in regeneration.regenerate(self._events())}
+        second = {q["questionId"] for q in regeneration.regenerate(self._events())}
         assert first == second
+
+
+class TestRetired:
+    """
+    The score-arithmetic questions no template makes any more. Nothing
+    regenerates their slot, so without this the prune could never see them and
+    they would stay approved in the bank, still winning quiz slots.
+    """
+
+    @pytest.mark.parametrize("sport,reason", [
+        ("soccer", "soccer_big_win"), ("soccer", "soccer_goal_fest"),
+        ("nfl", "regular_season_blowout"), ("nfl", "super_bowl"),
+        ("nba", "nba_low_score"), ("mlb", "blowout"), ("mlb", "postseason_shutout"),
+    ])
+    def test_a_score_question_is_retired(self, sport, reason):
+        assert regeneration.retired({"type": "numeric", "sport": sport, "sourceReason": reason})
+
+    @pytest.mark.parametrize("q", [
+        # Same event, different format: the replacement itself.
+        {"type": "mc", "sport": "soccer", "sourceReason": "soccer_big_win"},
+        # Numeric, but not a score: innings and title-race arithmetic stay.
+        {"type": "numeric", "sport": "mlb", "sourceReason": "extra_innings_marathon"},
+        {"type": "numeric", "sport": "soccer", "sourceReason": "soccer_title_clinched"},
+        # Reason codes are not unique across sports.
+        {"type": "numeric", "sport": "nhl", "sourceReason": "blowout"},
+    ])
+    def test_everything_else_is_not(self, q):
+        assert not regeneration.retired(q)
