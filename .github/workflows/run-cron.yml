@@ -32,9 +32,12 @@ jobs:
   invoke:
     runs-on: ubuntu-latest
     steps:
+      - uses: Xomware/github-actions/actions/load-infisical-secrets@v1
+        with:
+          path: /today-in-sports
       - uses: aws-actions/configure-aws-credentials@v6
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-to-assume: ${{ env.AWS_BACKEND_ROLE_ARN }}
           aws-region: us-east-1
 
       - name: Invoke ${{ inputs.job }}
